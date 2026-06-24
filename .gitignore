@@ -1,0 +1,11 @@
+# env — JANGAN di-commit
+.env.local
+.env
+
+# Next.js
+.next/
+out/
+node_modules/
+
+# Vercel
+.vercel
