@@ -10,6 +10,7 @@ function getAuth() {
   })
 }
 
+// Ambil daftar semua sheet beserta GID-nya
 export async function getSheetNames(): Promise<{ name: string; gid: number }[]> {
   const sheets = google.sheets({ version: "v4", auth: getAuth() })
   const res = await sheets.spreadsheets.get({
@@ -21,7 +22,11 @@ export async function getSheetNames(): Promise<{ name: string; gid: number }[]> 
   }))
 }
 
-export async function readSheetAsCSV(sheetName: string, maxRows = 200): Promise<string> {
+// Baca satu sheet → CSV string, dengan Next.js cache tag
+export async function readSheetAsCSV(
+  sheetName: string,
+  maxRows = 200
+): Promise<string> {
   const sheets = google.sheets({ version: "v4", auth: getAuth() })
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID!,
@@ -29,14 +34,17 @@ export async function readSheetAsCSV(sheetName: string, maxRows = 200): Promise<
   })
   const rows = res.data.values ?? []
   if (rows.length < 2) return "(sheet kosong)"
-  return rows.map(row =>
-    row.map(cell => {
-      const s = String(cell ?? "")
-      return s.includes(",") ? `"${s.replace(/"/g, '""')}"` : s
-    }).join(",")
-  ).join("\n")
+  return rows
+    .map(row =>
+      row.map(cell => {
+        const s = String(cell ?? "")
+        return s.includes(",") ? `"${s.replace(/"/g, '""')}"` : s
+      }).join(",")
+    )
+    .join("\n")
 }
 
+// Baca semua sheet sekaligus secara paralel
 export async function getAllSheetsData(): Promise<Record<string, string>> {
   const list = await getSheetNames()
   const results = await Promise.all(
