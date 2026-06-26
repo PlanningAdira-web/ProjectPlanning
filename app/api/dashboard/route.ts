@@ -10,20 +10,30 @@ function safeJSON(s: string) {
   catch { return {} }
 }
 
+const PROMPT = `Analisa semua data dari spreadsheet dan kembalikan HANYA JSON ini tanpa teks lain:
+{
+  "overall_capacity_pct": 0,
+  "achievement_pct": 0,
+  "material_readiness_pct": 0,
+  "lines_at_risk": 0,
+  "top_priority": "daftar 3 prioritas tindakan hari ini, pisahkan dengan newline",
+  "planning_risk_level": "TINGGI|SEDANG|RENDAH",
+  "mp_shortage": 0,
+  "schedule_adjustment_needed": 0,
+  "forecast_demand_4w": 0,
+  "forecast_capacity_gap": 0,
+  "material_risk_items": 0,
+  "risk_score_12w": "TINGGI|SEDANG|RENDAH"
+}
+Gunakan data aktual dari sheet. Jika data tidak tersedia untuk field tertentu, isi 0 atau string kosong.`
+
 export async function GET() {
   try {
     const data = await getAllSheetsData()
-    const sheetNames = Object.keys(data).join(", ")
-    const [r1, r2, r3] = await Promise.all([
-      askClaude(`Sheet tersedia: ${sheetNames}. Analisa data produksi DST & Sewing. Kembalikan HANYA JSON:
-{"total_po":0,"at_risk":0,"avg_deviation_pct":0,"wip_status":"normal","top_issues":[{"po":"","dev_pct":0}]}`, data),
-      askClaude(`Sheet tersedia: ${sheetNames}. Analisa kesiapan pre-production. Kembalikan HANYA JSON:
-{"siap":0,"berisiko":0,"terlambat":0,"critical_po":"","critical_days_left":0,"most_missing_item":""}`, data),
-      askClaude(`Sheet tersedia: ${sheetNames}. Analisa shipment history & forecasting. Kembalikan HANYA JSON:
-{"otd_rate_pct":0,"avg_delay_days":0,"top_root_cause":"","next_month_forecast_pcs":0,"current_month_pcs":0}`, data),
-    ])
+    const raw = await askClaude(PROMPT, data)
+    const kpi = safeJSON(raw)
     return NextResponse.json({
-      model1: safeJSON(r1), model2: safeJSON(r2), model3: safeJSON(r3),
+      ...kpi,
       sheet_names: Object.keys(data),
       updated_at: new Date().toISOString(),
     })
