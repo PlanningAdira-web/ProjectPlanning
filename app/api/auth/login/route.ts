@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
-import { findUser, signToken, COOKIE_NAME } from "@/lib/auth"
+import { findUser, signToken, COOKIE_NAME, GUEST_USER } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password } = await req.json()
-    if (!username || !password)
-      return NextResponse.json({ ok:false, error:"Username dan password wajib diisi" }, { status:400 })
-    const user = findUser(username.trim(), password)
+    const { username, password, guest } = await req.json()
+
+    // Guest login — langsung tanpa validasi
+    const user = guest ? GUEST_USER : findUser(username?.trim() ?? "", password ?? "")
+
     if (!user)
       return NextResponse.json({ ok:false, error:"Username atau password salah" }, { status:401 })
+
     const token = await signToken(user)
     const res   = NextResponse.json({ ok:true, user })
     res.cookies.set(COOKIE_NAME, token, {
-      httpOnly:true, secure:process.env.NODE_ENV==="production",
-      sameSite:"lax", maxAge:60*60*8, path:"/",
+      httpOnly : true,
+      secure   : process.env.NODE_ENV === "production",
+      sameSite : "lax",
+      maxAge   : 60 * 60 * 8, // 8 jam
+      path     : "/",
     })
     return res
   } catch (e: any) {

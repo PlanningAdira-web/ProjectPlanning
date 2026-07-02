@@ -1,8 +1,7 @@
 import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
 
-// ── Tipe ─────────────────────────────────────────────────────
-export type Role = "admin" | "analyst" | "planning" | "viewer"
+export type Role = "admin" | "planning" | "viewer"
 
 export type User = {
   username : string
@@ -10,14 +9,13 @@ export type User = {
   role     : Role
 }
 
-// ── Hak akses per role ────────────────────────────────────────
+// Hak akses per role
 export const PERMISSIONS: Record<Role, {
-  canRefreshAI : boolean   // klik "Refresh Analisis AI"
-  canChat      : boolean   // akses Chat Room AI
-  canToggleAI  : boolean   // toggle AI on/off (admin only)
+  canRefreshAI : boolean
+  canChat      : boolean
+  canToggleAI  : boolean
 }> = {
   admin    : { canRefreshAI: true,  canChat: true,  canToggleAI: true  },
-  analyst  : { canRefreshAI: true,  canChat: true,  canToggleAI: false },
   planning : { canRefreshAI: false, canChat: true,  canToggleAI: false },
   viewer   : { canRefreshAI: false, canChat: false, canToggleAI: false },
 }
@@ -26,32 +24,29 @@ export function can(role: Role, action: keyof typeof PERMISSIONS[Role]): boolean
   return PERMISSIONS[role][action] === true
 }
 
-// ── Daftar user dari env var ──────────────────────────────────
-// Format USER_CREDENTIALS di Vercel:
-// [{"username":"ppicadira","password":"pass123","name":"PPIC Adira","role":"admin"},...]
-export function getUsers(): Array<User & { password: string }> {
-  try {
-    const raw = process.env.USER_CREDENTIALS ?? "[]"
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
-}
+// User tetap di kode — tidak perlu env var
+// Untuk ganti password, edit langsung di sini lalu push
+const USERS: Array<User & { password: string }> = [
+  { username:"analyst",  password:"analyst123",  name:"PPIC Adira",    role:"admin"    },
+  { username:"planning", password:"planning123", name:"Planning Team",  role:"planning" },
+]
 
 export function findUser(username: string, password: string): User | null {
-  const users = getUsers()
-  const found = users.find(
-    u => u.username === username && u.password === password
-  )
+  const found = USERS.find(u => u.username === username && u.password === password)
   if (!found) return null
   return { username: found.username, name: found.name, role: found.role }
 }
 
-// ── JWT helpers ───────────────────────────────────────────────
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "planning-ai-secret-ganti-ini"
-)
-const COOKIE_NAME = "planning_session"
+// Guest — langsung masuk tanpa password
+export const GUEST_USER: User = {
+  username : "guest",
+  name     : "Guest",
+  role     : "viewer",
+}
+
+// JWT helpers
+const SECRET      = new TextEncoder().encode(process.env.JWT_SECRET ?? "planning-adira-secret-2024")
+export const COOKIE_NAME = "planning_session"
 
 export async function signToken(user: User): Promise<string> {
   return new SignJWT({ ...user })
@@ -65,9 +60,7 @@ export async function verifyToken(token: string): Promise<User | null> {
   try {
     const { payload } = await jwtVerify(token, SECRET)
     return payload as unknown as User
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 export async function getSession(): Promise<User | null> {
@@ -76,5 +69,3 @@ export async function getSession(): Promise<User | null> {
   if (!token) return null
   return verifyToken(token)
 }
-
-export { COOKIE_NAME }
