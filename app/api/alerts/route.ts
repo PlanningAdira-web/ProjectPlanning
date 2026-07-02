@@ -1,41 +1,33 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { getSession, can } from "@/lib/auth"
+import { cacheGet, cacheSet, cacheInfo, CACHE_KEYS } from "@/lib/cache"
 import { getAllSheetsData } from "@/lib/sheets"
 import { askClaude } from "@/lib/claude"
-import { isAIDisabled, aiDisabledResponseGET } from "@/lib/ai-toggle"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
+const KEY = CACHE_KEYS.ALERTS
 
-export async function GET() {
-  // ── Toggle check: hemat token jika AI_DISABLED=true ──────
-  if (isAIDisabled()) {
-    return aiDisabledResponseGET({ alerts: [] })
-  }
-
-  try {
-    const data = await getAllSheetsData()
-    const today = new Date().toLocaleDateString("id-ID", {
-      day: "2-digit", month: "short", year: "numeric",
-    })
-    const raw = await askClaude(
-      `Hari ini: ${today}. Analisa semua data dan buat daftar alert produksi.
-Kembalikan HANYA JSON array (maks 8 item, urutkan dari paling kritis):
-[{"level":"danger|warn|info","model":"Model 1|Model 2|Model 3","title":"max 80 karakter","body":"max 150 karakter","po":"nomor PO atau null"}]
-danger=aksi hari ini, warn=3 hari ke depan, info=informasi perencanaan.`,
-      data
-    )
-    let alerts = []
+export async function GET(req: NextRequest) {
+  const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1"
+  if (forceRefresh) {
+    const user = await getSession()
+    if (!user) return NextResponse.json({ error:"Login diperlukan" }, { status:401 })
+    if (!can(user.role, "canRefreshAI")) return NextResponse.json({ error:"Tidak memiliki akses refresh" }, { status:403 })
     try {
-      alerts = JSON.parse(raw.replace(/```json|```/g, "").trim())
-    } catch {
-      alerts = []
+      const data  = await getAllSheetsData()
+      const today = new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})
+      const raw   = await askClaude(`Hari ini: ${today}. Buat alert produksi. HANYA JSON array maks 8 item: [{"level":"danger|warn|info","title":"max 80 kar","body":"max 150 kar","po":"PO atau null"}]`, data)
+      let alerts = []
+      try { alerts = JSON.parse(raw.replace(/```json|```/g,"").trim()) } catch {}
+      const entry = cacheSet(KEY, alerts, user.username)
+      return NextResponse.json({ alerts, _cache:{ fresh:true, cached_by:entry.cached_by, cached_at:new Date(entry.cached_at).toLocaleString("id-ID") } })
+    } catch (e: any) {
+      return NextResponse.json({ error:e.message }, { status:500 })
     }
-    return NextResponse.json({
-      alerts,
-      ai_disabled: false,
-      generated_at: new Date().toISOString(),
-    })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
   }
+  const entry = cacheGet<any[]>(KEY)
+  if (!entry) return NextResponse.json({ alerts:[], _cache:{ has_cache:false } })
+  const info = cacheInfo(KEY)
+  return NextResponse.json({ alerts:entry.data, _cache:{ has_cache:true, is_expired:info.is_expired, cached_at:info.cached_at, minutes_ago:info.minutes_ago } })
 }
