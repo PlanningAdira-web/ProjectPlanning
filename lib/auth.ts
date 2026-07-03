@@ -9,26 +9,25 @@ export type User = {
   role     : Role
 }
 
-// Hak akses per role
 export const PERMISSIONS: Record<Role, {
   canRefreshAI : boolean
   canChat      : boolean
+  canBalancing : boolean
   canToggleAI  : boolean
+  canTodo      : boolean
 }> = {
-  admin    : { canRefreshAI: true,  canChat: true,  canToggleAI: true  },
-  planning : { canRefreshAI: false, canChat: true,  canToggleAI: false },
-  viewer   : { canRefreshAI: false, canChat: false, canToggleAI: false },
+  admin    : { canRefreshAI:true,  canChat:true,  canBalancing:true,  canToggleAI:true,  canTodo:true  },
+  planning : { canRefreshAI:false, canChat:true,  canBalancing:true,  canToggleAI:false, canTodo:true  },
+  viewer   : { canRefreshAI:false, canChat:false, canBalancing:false, canToggleAI:false, canTodo:false },
 }
 
 export function can(role: Role, action: keyof typeof PERMISSIONS[Role]): boolean {
   return PERMISSIONS[role][action] === true
 }
 
-// User tetap di kode — tidak perlu env var
-// Untuk ganti password, edit langsung di sini lalu push
 const USERS: Array<User & { password: string }> = [
-  { username:"analyst",  password:"analyst123",  name:"PPIC Adira",    role:"admin"    },
-  { username:"planning", password:"planning123", name:"Planning Team",  role:"planning" },
+  { username:"analyst",  password:"analyst123",  name:"PPIC Adira",   role:"admin"    },
+  { username:"planning", password:"planning123", name:"Planning Team", role:"planning" },
 ]
 
 export function findUser(username: string, password: string): User | null {
@@ -37,21 +36,15 @@ export function findUser(username: string, password: string): User | null {
   return { username: found.username, name: found.name, role: found.role }
 }
 
-// Guest — langsung masuk tanpa password
-export const GUEST_USER: User = {
-  username : "guest",
-  name     : "Guest",
-  role     : "viewer",
-}
+export const GUEST_USER: User = { username:"guest", name:"Guest", role:"viewer" }
 
-// JWT helpers
 const SECRET      = new TextEncoder().encode(process.env.JWT_SECRET ?? "planning-adira-secret-2024")
 export const COOKIE_NAME = "planning_session"
 
 export async function signToken(user: User): Promise<string> {
   return new SignJWT({ ...user })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("8h")
+    .setProtectedHeader({ alg:"HS256" })
+    .setExpirationTime("24h")
     .setIssuedAt()
     .sign(SECRET)
 }
