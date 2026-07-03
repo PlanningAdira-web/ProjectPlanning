@@ -31,5 +31,5 @@ export async function GET(req: NextRequest) {
   const entry = cacheGet<any[]>(KEY)
   if (!entry) return NextResponse.json({ alerts:[], _cache:{ has_cache:false } })
   const info = cacheInfo(KEY)
-  return NextResponse.json({ alerts:entry.data, _cache:{ has_cache:true, ...info } })
+  return NextResponse.json({ alerts:entry.data, _cache:{ ...info } })
 }
