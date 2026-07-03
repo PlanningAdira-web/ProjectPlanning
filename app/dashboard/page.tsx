@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
 type Role  = "admin"|"planning"|"viewer"
@@ -427,8 +427,8 @@ export default function DashboardPage() {
               <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, width:"100%" }}>
                 <thead>
                   <tr>
-                    {[["Line",44,"left"],["SPO",68,"left"],["Style",155,"left"],["Qty Plan",72,"right"],["Note",120,"left"],["Priority",85,"center"]].map(([h,w,a],i) => (
-                      <th key={i} style={{ background:"#1a5c2a", color:"#fff", padding:"7px 9px", fontWeight:500, whiteSpace:"nowrap", position:"sticky", top:0, zIndex:4, textAlign:a as any, minWidth:w as number, left:i===0?0:i===1?44:i===2?112:i===3?267:i===4?339:i===5?459:undefined, borderRight:i===5?"2px solid rgba(255,255,255,.3)":"0.5px solid rgba(255,255,255,.15)" }}>{h}</th>
+                    {([ ["Line",44,"left",0],["SPO",68,"left",44],["Style",155,"left",112],["Qty Plan",72,"right",267],["Note",120,"left",339],["Priority",85,"center",459] ] as [string,number,string,number][]).map(([h,w,a,l],i) => (
+                      <th key={i} style={{ background:"#1a5c2a", color:"#fff", padding:"7px 9px", fontWeight:500, whiteSpace:"nowrap" as const, position:"sticky", top:0, zIndex:4, textAlign:a as any, minWidth:w, left:l, borderRight:i===5?"2px solid rgba(255,255,255,.3)":"0.5px solid rgba(255,255,255,.15)" }}>{h}</th>
                     ))}
                     {[["29-Jun","#1b4d24"],["30-Jun","#1b4d24"],["01-Jul","#1b4d24"],["02-Jul","#1b4d24"],["03-Jul","#245c2a"],["04-Jul","#245c2a"],["05-Jul","#245c2a"],["06-Jul","#245c2a"],["07-Jul","#1a5c2a"],["08-Jul","#1a5c2a"],["09-Jul","#1a5c2a"],["10-Jul","#1a5c2a"],["11-Jul","#1a5c2a"],["12-Jul","#1a5c2a"]].map(([d,bg]) => (
                       <th key={d} style={{ background:bg, color:"#fff", padding:"7px 9px", fontWeight:500, whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2, minWidth:60, textAlign:"center", borderRight:"0.5px solid rgba(255,255,255,.1)" }}>{d}</th>

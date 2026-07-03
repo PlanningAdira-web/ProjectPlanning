@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession, can } from "@/lib/auth"
 import { cacheGet, cacheSet, cacheInfo, CACHE_KEYS } from "@/lib/cache"
-import { getAllSheetsData } from "@/lib/sheets"
+import { getAllSheetData } from "@/lib/sheets"
 import { askClaude } from "@/lib/claude"
 
 export const runtime = "nodejs"
@@ -10,24 +10,32 @@ const KEY = CACHE_KEYS.ALERTS
 
 export async function GET(req: NextRequest) {
   const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1"
+
   if (forceRefresh) {
     const user = await getSession()
     if (!user) return NextResponse.json({ error:"Login diperlukan" }, { status:401 })
-    if (!can(user.role, "canRefreshAI")) return NextResponse.json({ error:"Akses ditolak" }, { status:403 })
+    if (!can(user.role, "canRefreshAI"))
+      return NextResponse.json({ error:"Akses ditolak" }, { status:403 })
     try {
-      const data  = await getAllSheetsData()
-      const today = new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})
-      const raw   = await askClaude(
-        `Hari ini: ${today}. Buat alert produksi dari data. Kembalikan HANYA JSON array maks 8 item:
-[{"level":"danger|warn|info","title":"max 80 kar","body":"max 150 kar","po":"SPO atau null"}]`,
-        data
+      const { csv } = await getAllSheetData()
+      const today   = new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})
+      const raw     = await askClaude(
+        `Hari ini: ${today}. Buat alert produksi dari data. Kembalikan HANYA JSON array maks 8 item tanpa teks lain:
+[{"level":"danger|warn|info","title":"max 80 karakter","body":"max 150 karakter","po":"SPO atau null"}]`,
+        csv
       )
-      let alerts = []
-      try { alerts = JSON.parse(raw.replace(/```json|```/g,"").trim()) } catch {}
+      let alerts: any[] = []
+      try { alerts = JSON.parse(raw.replace(/```json|```/g,"").trim()) } catch { alerts = [] }
       const entry = cacheSet(KEY, alerts, user.username)
-      return NextResponse.json({ alerts, _cache:{ fresh:true, cached_by:entry.cached_by, cached_at:new Date(entry.cached_at).toLocaleString("id-ID") } })
-    } catch (e: any) { return NextResponse.json({ error:e.message }, { status:500 }) }
+      return NextResponse.json({
+        alerts,
+        _cache:{ fresh:true, cached_by:entry.cached_by, cached_at:new Date(entry.cached_at).toLocaleString("id-ID") }
+      })
+    } catch (e: any) {
+      return NextResponse.json({ error:e.message }, { status:500 })
+    }
   }
+
   const entry = cacheGet<any[]>(KEY)
   if (!entry) return NextResponse.json({ alerts:[], _cache:{ has_cache:false } })
   const info = cacheInfo(KEY)
