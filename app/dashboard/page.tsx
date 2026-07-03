@@ -202,7 +202,8 @@ export default function DashboardPage() {
         setBalMsgs([...next, { role:"assistant", content:buf }])
       }
       // Simpan ke history
-      setBalHistory(h => [{date: new Date().toLocaleString("id-ID"), label:`${bStyle||"Balancing"} ${bQty?`· ${parseInt(bQty).toLocaleString()} pcs`:""}`, msgs:[...next, { role:"assistant" as const, content:buf }]}, ...h.slice(0,9)])
+      const histLabel = (bStyle || "Balancing") + (bQty ? " · " + parseInt(bQty).toLocaleString() + " pcs" : "")
+      setBalHistory(h => [{date: new Date().toLocaleString("id-ID"), label: histLabel, msgs:[...next, { role:"assistant" as const, content:buf }]}, ...h.slice(0,9)])
     } catch { setBalMsgs([...next, { role:"assistant", content:"❌ Gagal terhubung ke AI." }]) }
     finally { setBalTyping(false) }
   }
@@ -221,7 +222,7 @@ export default function DashboardPage() {
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
 
   const navStyle = (p: Page): React.CSSProperties => ({
-    padding:"9px 14px", fontSize:11, cursor:"pointer", borderBottom:`3px solid ${page===p?"#4caf50":"transparent"}`,
+    padding:"9px 14px", fontSize:11, cursor:"pointer",
     display:"flex", alignItems:"center", gap:5, color:page===p?"#fff":"#a5d6a7", fontWeight:page===p?500:400, transition:"all .15s",
     background:"transparent", border:"none", borderBottom:`3px solid ${page===p?"#4caf50":"transparent"}`,
   })
@@ -322,7 +323,7 @@ export default function DashboardPage() {
                         <td style={{ padding:"6px 9px", borderBottom:"0.5px solid #c8e6c9", textAlign:"right" }}>{Number(r.produksi_pcs).toLocaleString("id-ID")}</td>
                         <td style={{ padding:"6px 9px", borderBottom:"0.5px solid #c8e6c9", textAlign:"right" }}>{Number(r.sisa_pcs).toLocaleString("id-ID")}</td>
                         <td style={{ padding:"6px 9px", borderBottom:"0.5px solid #c8e6c9" }}><PBar pct={r.pct} color={col}/>{r.pct}%</td>
-                        <td style={{ padding:"6px 9px", borderBottom:"0.5px solid #c8e6c9" }}><Dot color={scol[r.status]???"#999"}/>{r.status}</td>
+                        <td style={{ padding:"6px 9px", borderBottom:"0.5px solid #c8e6c9" }}><Dot color={scol[r.status] ?? "#999"}/>{r.status}</td>
                       </tr>
                     )
                   })}
@@ -376,11 +377,11 @@ export default function DashboardPage() {
                   )}
                   {todos.map(t => (
                     <div key={t.id} onClick={()=>handleToggleTodo(t.id)}
-                      style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"7px 9px", borderRadius:7, marginBottom:5, border:"0.5px solid #c8e6c9", background:t.done?"#f1f8f2":"#fff", cursor:perms.canTodo?"pointer":"default", opacity:t.done?.65:1 }}>
+                      style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"7px 9px", borderRadius:7, marginBottom:5, border:"0.5px solid #c8e6c9", background:t.done?"#f1f8f2":"#fff", cursor:perms.canTodo?"pointer":"default", opacity:t.done ? 0.65 : 1 }}>
                       <div style={{ width:17, height:17, borderRadius:4, border:`1.5px solid ${t.done?"#2e7d32":"#2e7d32"}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, background:t.done?"#2e7d32":"transparent" }}>
                         {t.done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                       </div>
-                      <div style={{ flex:1, fontSize:11, color:"#1b2a1e", lineHeight:1.5, textDecoration:t.done?"line-through":"none", opacity:t.done?.6:1 }}>{t.text}</div>
+                      <div style={{ flex:1, fontSize:11, color:"#1b2a1e", lineHeight:1.5, textDecoration:t.done?"line-through":"none", opacity:t.done ? 0.6 : 1 }}>{t.text}</div>
                       <span style={{ fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500, flexShrink:0,
                         background: t.source==="ai" ? "#e0f2f1" : t.priority==="urgent" ? "#ffebee" : "#f1f8f2",
                         color: t.source==="ai" ? "#00695c" : t.priority==="urgent" ? "#c62828" : "#6b8f72" }}>
@@ -689,7 +690,7 @@ export default function DashboardPage() {
                     placeholder="Tanya tentang planning, SPO, material, kapasitas..."
                     style={S.chatInput}/>
                   <button onClick={()=>sendAI()} disabled={aiTyping||!aiInput.trim()}
-                    style={{ ...S.sendBtn, borderRadius:"0 8px 8px 0", opacity:aiTyping||!aiInput.trim()?.5:1 }}>
+                    style={{ ...S.sendBtn, borderRadius:"0 8px 8px 0", opacity:(aiTyping||!aiInput.trim()) ? 0.5 : 1 }}>
                     {aiTyping?"...":"Kirim"}
                   </button>
                 </div>
