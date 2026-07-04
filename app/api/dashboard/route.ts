@@ -10,7 +10,7 @@ export const maxDuration = 60
 const KEY = CACHE_KEYS.DASHBOARD
 
 function safeJSON(s: string) {
-  try { return JSON.parse(s.replace(/```json|```/g,"").trim()) } catch { return {} }
+  try { return JSON.parse(s.replace(/```json|```/g, "").trim()) } catch { return {} }
 }
 
 const PROMPT = `Analisa semua data produksi dan kembalikan HANYA JSON ini tanpa teks lain:
@@ -41,28 +41,32 @@ export async function GET(req: NextRequest) {
 
   if (forceRefresh) {
     const user = await getSession()
-    if (!user) return NextResponse.json({ error:"Login diperlukan" }, { status:401 })
+    if (!user) return NextResponse.json({ error: "Login diperlukan" }, { status: 401 })
     if (!can(user.role, "canRefreshAI"))
-      return NextResponse.json({ error:`Role "${user.role}" tidak dapat refresh analisis` }, { status:403 })
+      return NextResponse.json({ error: `Role "${user.role}" tidak dapat refresh analisis` }, { status: 403 })
     try {
       const sheetsData = await getAllSheetsData()
       const csv        = toClaudeCSV(sheetsData)
       const raw        = await askClaude(PROMPT, csv)
       const kpi        = safeJSON(raw)
-      const entry      = cacheSet(KEY, kpi, user.username)
-      const info       = cacheInfo(KEY)
-      return NextResponse.json({ ...kpi, _cache:{ fresh:true, ...info } })
+      const entry      = await cacheSet(KEY, kpi, user.username)
+      const info       = await cacheInfo(KEY)
+      return NextResponse.json({ ...kpi, _cache: { fresh: true, ...info } })
     } catch (e: any) {
-      return NextResponse.json({ error: e.message }, { status:500 })
+      return NextResponse.json({ error: e.message }, { status: 500 })
     }
   }
 
-  const entry = cacheGet<any>(KEY)
+  // Baca cache (memory dulu, lalu Sheets jika kosong)
+  const entry = await cacheGet<any>(KEY)
   if (!entry) {
     return NextResponse.json({
-      _cache:{ has_cache:false, message:"Belum ada analisis. Admin/Analyst perlu klik Refresh Analisis AI." }
+      _cache: {
+        has_cache: false,
+        message: "Belum ada analisis. Admin/Analyst perlu klik Refresh Analisis AI.",
+      },
     })
   }
-  const info = cacheInfo(KEY)
-  return NextResponse.json({ ...(entry.data as object), _cache:{ ...info } })
+  const info = await cacheInfo(KEY)
+  return NextResponse.json({ ...(entry.data as object), _cache: { ...info } })
 }
