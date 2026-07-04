@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSession, can } from "@/lib/auth"
 import { cacheGet, cacheSet, cacheInfo, CACHE_KEYS } from "@/lib/cache"
-import { getAllSheetData } from "@/lib/sheets"
+import { getAllSheetsData } from "@/lib/sheets"
+import { toClaudeCSV } from "@/lib/sheets-adapter"
 import { askClaude } from "@/lib/claude"
 
 export const runtime = "nodejs"
@@ -17,9 +18,10 @@ export async function GET(req: NextRequest) {
     if (!can(user.role, "canRefreshAI"))
       return NextResponse.json({ error:"Akses ditolak" }, { status:403 })
     try {
-      const { csv } = await getAllSheetData()
-      const today   = new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})
-      const raw     = await askClaude(
+      const sheetsData = await getAllSheetsData()
+      const csv        = toClaudeCSV(sheetsData)
+      const today      = new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})
+      const raw        = await askClaude(
         `Hari ini: ${today}. Buat alert produksi dari data. Kembalikan HANYA JSON array maks 8 item tanpa teks lain:
 [{"level":"danger|warn|info","title":"max 80 karakter","body":"max 150 karakter","po":"SPO atau null"}]`,
         csv

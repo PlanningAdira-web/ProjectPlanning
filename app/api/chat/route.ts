@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { getSession, can } from "@/lib/auth"
-import { getAllSheetData } from "@/lib/sheets"
+import { getAllSheetsData } from "@/lib/sheets"
+import { toClaudeCSV } from "@/lib/sheets-adapter"
 import { askClaudeStream, ChatMessage } from "@/lib/claude"
 
 export const runtime = "nodejs"
@@ -24,9 +25,10 @@ export async function POST(req: NextRequest) {
     const { message, history = [] } = await req.json()
     if (!message?.trim()) return new Response("Pesan kosong", { status:400 })
 
-    const { csv } = await getAllSheetData()
-    const userMsg = `[User: ${user.name} | Role: ${user.role}]\n${message}`
-    const stream  = await askClaudeStream(userMsg, csv, history as ChatMessage[])
+    const sheetsData = await getAllSheetsData()
+    const csv        = toClaudeCSV(sheetsData)
+    const userMsg    = `[User: ${user.name} | Role: ${user.role}]\n${message}`
+    const stream     = await askClaudeStream(userMsg, csv, history as ChatMessage[])
 
     const enc = new TextEncoder()
     return new Response(

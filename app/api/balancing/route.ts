@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { getSession, can } from "@/lib/auth"
-import { getAllSheetData } from "@/lib/sheets"
+import { getAllSheetsData } from "@/lib/sheets"
+import { toClaudeCSV } from "@/lib/sheets-adapter"
 import { askClaudeStream, ChatMessage } from "@/lib/claude"
 
 export const runtime = "nodejs"
@@ -24,14 +25,13 @@ export async function POST(req: NextRequest) {
     const { message, history = [], orderContext } = await req.json()
     if (!message?.trim()) return new Response("Pesan kosong", { status:400 })
 
-    const { csv } = await getAllSheetData()
+    const sheetsData = await getAllSheetsData()
+    const csv        = toClaudeCSV(sheetsData)
 
-    // Bangun konteks order baru jika ada
     const orderCtx = orderContext
       ? `\n\n=== KONTEKS ORDER BARU ===\nStyle: ${orderContext.style}\nJenis Style: ${orderContext.jenis}\nQty: ${Number(orderContext.qty).toLocaleString("id-ID")} pcs\nRencana F. Prod: ${orderContext.fProd}\n=== AKHIR KONTEKS ===\n`
       : ""
 
-    // Inject konteks balancing ke dalam pesan (bukan param ke-4)
     const balancingContext = `[BALANCING DST ANALYST | User: ${user.name} | Role: ${user.role}]
 Tugas: Analisis ketersediaan line dari data aktual, rekomendasikan balancing optimal.
 Pertimbangkan: kolom Jenis Style (Full Pola/Synth/Patch+IJ), tanggal RENCANA F.PROD, kapasitas historis.
