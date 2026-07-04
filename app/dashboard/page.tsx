@@ -244,11 +244,14 @@ export default function DashboardPage() {
 
       {/* Header */}
       <div style={S.hdr}>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <div style={{ width:36, height:36, borderRadius:8, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0 }}>
-            <Image src="/Logo.svg" alt="Logo" width={32} height={32} style={{ objectFit:"contain" }} priority/>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0, padding:3, boxShadow:"0 1px 6px rgba(0,0,0,.15)" }}>
+            <Image src="/Logo.svg" alt="Logo PT Adira Semesta Industry" width={30} height={30} style={{ objectFit:"contain" }} priority/>
           </div>
-          <Image src="/Tulisan.svg" alt="Production Planning PT Adira Semesta Industry" width={180} height={55} style={{ objectFit:"contain" }} priority/>
+          <div>
+            <div style={{ color:"#fff", fontSize:14, fontWeight:600, lineHeight:1.2, letterSpacing:"-.1px" }}>Production Planning</div>
+            <div style={{ color:"#a5d6a7", fontSize:10, lineHeight:1.2, marginTop:1 }}>PT. Adira Semesta Industry</div>
+          </div>
         </div>
         <div style={S.hdrR}>
           <span style={S.liveBadge}>Live</span>
