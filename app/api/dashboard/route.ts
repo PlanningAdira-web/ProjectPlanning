@@ -9,51 +9,92 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 const KEY = CACHE_KEYS.DASHBOARD
 
-function safeJSON(s: string) {
+/**
+ * Parse JSON dari respons Claude yang mungkin dibungkus markdown.
+ * Handles: ```json {...} ```, plain {...}, atau teks + {...}
+ */
+function parseClaudeJSON(raw: string): Record<string, unknown> {
+  if (!raw || raw.trim().length === 0) return {}
+
+  // Step 1: hapus backtick markdown (semua variasi)
+  let s = raw
+  s = s.split("```json").join("")
+  s = s.split("```JSON").join("")
+  s = s.split("```").join("")
+  s = s.trim()
+
+  // Step 2: cari blok JSON dengan mencari { ... }
+  const firstBrace = s.indexOf("{")
+  const lastBrace  = s.lastIndexOf("}")
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return {}
+
+  const jsonStr = s.slice(firstBrace, lastBrace + 1)
+
+  // Step 3: parse
   try {
-    // Hapus semua variasi markdown code block yang mungkin dikembalikan Claude
-    let clean = s
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*/g, "")
-      .trim()
-    // Ambil dari { pertama sampai } terakhir
-    const start = clean.indexOf("{")
-    const end   = clean.lastIndexOf("}")
-    if (start === -1 || end === -1 || end <= start) return {}
-    return JSON.parse(clean.slice(start, end + 1))
-  } catch { return {} }
+    const result = JSON.parse(jsonStr)
+    if (typeof result === "object" && result !== null) return result
+    return {}
+  } catch {
+    return {}
+  }
 }
 
-const PROMPT = `Kamu adalah AI Production Planning Analyst. Analisa data produksi berikut dan kembalikan HANYA objek JSON valid, tanpa markdown, tanpa penjelasan, tanpa teks apapun sebelum atau sesudah JSON.
+// Prompt eksplisit melarang markdown
+const PROMPT = `Kamu adalah AI Production Planning Analyst untuk PT Adira Semesta Industry.
 
-Format JSON yang harus dikembalikan:
+PENTING: Kembalikan HANYA objek JSON murni. DILARANG menggunakan backtick, markdown, atau teks apapun selain JSON.
+
+Analisa data produksi yang diberikan dan kembalikan objek JSON dengan struktur PERSIS seperti ini:
+
 {
-  "kpi_score": 98.22,
-  "scorecard_score": 77.02,
-  "outstanding_spo_pcs": 251000,
-  "wip_over_1week_pcs": 22300,
-  "overall_capacity_pct": 85,
-  "achievement_pct": 77,
-  "lines_at_risk": 3,
-  "planning_risk_level": "SEDANG",
-  "mp_shortage": 2,
+  "kpi_score": 0.0,
+  "scorecard_score": 0.0,
+  "outstanding_spo_pcs": 0,
+  "wip_over_1week_pcs": 0,
+  "overall_capacity_pct": 0,
+  "achievement_pct": 0,
+  "lines_at_risk": 0,
+  "planning_risk_level": "RENDAH",
+  "mp_shortage": 0,
   "capacity_by_style": [
-    {"style":"nama style","order_pcs":10000,"produksi_pcs":7500,"sisa_pcs":2500,"pct":75,"status":"On Track"}
+    {
+      "style": "nama style",
+      "order_pcs": 0,
+      "produksi_pcs": 0,
+      "sisa_pcs": 0,
+      "pct": 0,
+      "status": "On Track"
+    }
   ],
   "material_incomplete": [
-    {"spo":"0904/26","style":"nama style","kekurangan":"item material","dst_date":"3 Jul"}
+    {
+      "spo": "0000/26",
+      "style": "nama style",
+      "kekurangan": "nama material",
+      "dst_date": "DD Mon"
+    }
   ],
   "todo_ai": [
-    {"text":"tindakan spesifik yang harus dilakukan hari ini berdasarkan data","priority":"urgent"}
+    {
+      "text": "tindakan konkret yang harus dilakukan hari ini",
+      "priority": "urgent"
+    }
   ]
 }
 
-Gunakan angka nyata dari data. Maksimal 5 item per array capacity_by_style, material_incomplete, dan todo_ai.`
+Aturan:
+- Gunakan angka aktual dari data, bukan 0
+- planning_risk_level: "TINGGI", "SEDANG", atau "RENDAH"
+- status capacity_by_style: "Selesai", "On Track", "Perlu Perhatian", atau "Kritis"
+- priority todo_ai: "urgent" atau "normal"
+- Maksimal 5 item per array
+- JANGAN tambahkan field lain di luar struktur di atas
+- JANGAN gunakan backtick atau markdown apapun`
 
 export async function GET(req: NextRequest) {
   const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1"
 
-  // ── REFRESH ──────────────────────────────────────────────────────
   if (forceRefresh) {
     const user = await getSession()
     if (!user)
@@ -65,7 +106,7 @@ export async function GET(req: NextRequest) {
       )
 
     try {
-      // 1. Ambil data dari semua sheet
+      // 1. Ambil data spreadsheet
       const sheetsData = await getAllSheetsData()
       if (!sheetsData || Object.keys(sheetsData).length === 0) {
         return NextResponse.json(
@@ -74,48 +115,43 @@ export async function GET(req: NextRequest) {
         )
       }
 
-      // 2. Konversi ke format Claude
+      // 2. Konversi ke CSV untuk Claude
       const csv = toClaudeCSV(sheetsData)
 
       // 3. Kirim ke Claude
       const raw = await askClaude(PROMPT, csv)
-      if (!raw || raw.trim().length === 0) {
-        return NextResponse.json(
-          { error: "Claude tidak mengembalikan respons. Periksa API key Anthropic." },
-          { status: 500 }
-        )
-      }
 
-      // 4. Parse JSON
-      const kpi = safeJSON(raw)
+      // 4. Parse JSON dari respons Claude
+      const kpi = parseClaudeJSON(raw)
+
       if (Object.keys(kpi).length === 0) {
         return NextResponse.json(
-          { error: `Claude mengembalikan format tidak valid. Respons raw: ${raw.slice(0, 200)}` },
+          {
+            error : "Gagal membaca respons AI. Silakan coba refresh kembali.",
+            debug : raw.slice(0, 300),
+          },
           { status: 500 }
         )
       }
 
-      // 5. Simpan ke cache (memory + Sheets)
+      // 5. Simpan ke cache (memory + sheet AI_Cache)
       const entry = await cacheSet(KEY, kpi, user.username)
       const info  = await cacheInfo(KEY)
 
-      return NextResponse.json({
-        ...kpi,
-        _cache: { fresh: true, ...info },
-      })
+      return NextResponse.json({ ...kpi, _cache: { fresh: true, ...info } })
+
     } catch (e: any) {
-      // Kembalikan error detail agar mudah debug
       return NextResponse.json(
         {
-          error  : e.message ?? "Unknown error",
-          detail : e.stack?.split("\n").slice(0, 3).join(" | ") ?? "",
+          error : e.message ?? "Unknown error saat refresh",
+          detail: e.stack?.split("\n").slice(0, 3).join(" | ") ?? "",
         },
         { status: 500 }
       )
     }
   }
 
-  // ── READ CACHE ───────────────────────────────────────────────────
+  // Baca dari cache
   const entry = await cacheGet<any>(KEY)
   if (!entry) {
     return NextResponse.json({
