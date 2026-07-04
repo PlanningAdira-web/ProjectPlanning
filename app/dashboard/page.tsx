@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
@@ -243,8 +244,12 @@ export default function DashboardPage() {
 
       {/* Header */}
       <div style={S.hdr}>
-        <div style={S.hdrLogo}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
-        <div><div style={S.hdrTitle}>Production Planning</div><div style={S.hdrSub}>PT Adira Semesta Industry</div></div>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ width:36, height:36, borderRadius:8, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0 }}>
+            <Image src="/Logo.svg" alt="Logo" width={32} height={32} style={{ objectFit:"contain" }} priority/>
+          </div>
+          <Image src="/Tulisan.svg" alt="Production Planning PT Adira Semesta Industry" width={180} height={55} style={{ objectFit:"contain" }} priority/>
+        </div>
         <div style={S.hdrR}>
           <span style={S.liveBadge}>Live</span>
           <span style={S.hdrDate}>{clock}</span>
