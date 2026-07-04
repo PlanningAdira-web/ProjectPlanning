@@ -1,15 +1,11 @@
 /**
  * Cache dua lapis:
- * 1. In-memory (cepat) — hilang saat cold start
- * 2. Google Sheets "AI_Cache" (persisten) — tetap ada setelah restart
- *
- * Saat GET: coba memory dulu → jika kosong, baca dari Sheets
- * Saat SET: simpan ke memory DAN ke Sheets secara bersamaan
+ * 1. In-memory — cepat, hilang saat cold start
+ * 2. Google Sheets "AI_Cache" — persisten, tetap ada setelah restart
  */
 
 import { google } from "googleapis"
 
-// ── In-memory store ──────────────────────────────────────────────
 type CacheEntry<T> = {
   data      : T
   cached_at : number
@@ -25,7 +21,6 @@ export const CACHE_KEYS = {
   TODO      : "todo_items",
 }
 
-// ── Google Sheets helpers ─────────────────────────────────────────
 const CACHE_SHEET = "AI_Cache"
 
 function getAuth() {
@@ -34,43 +29,58 @@ function getAuth() {
       client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       private_key : process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     },
+    // PENTING: scope harus include spreadsheets (bukan hanya readonly)
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   })
 }
 
-/** Pastikan sheet AI_Cache ada, buat jika belum */
-async function ensureCacheSheet(sheetsApi: any, spreadsheetId: string) {
+async function getSheets() {
+  const auth = getAuth()
+  return google.sheets({ version: "v4", auth })
+}
+
+/** Buat sheet AI_Cache jika belum ada */
+async function ensureCacheSheet(sheets: any, spreadsheetId: string): Promise<boolean> {
   try {
-    const meta = await sheetsApi.spreadsheets.get({ spreadsheetId })
-    const exists = meta.data.sheets?.some(
+    const meta = await sheets.spreadsheets.get({ spreadsheetId })
+    const exists = (meta.data.sheets ?? []).some(
       (s: any) => s.properties?.title === CACHE_SHEET
     )
     if (!exists) {
-      await sheetsApi.spreadsheets.batchUpdate({
+      await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
           requests: [{ addSheet: { properties: { title: CACHE_SHEET } } }],
         },
       })
+      console.log("[cache] Sheet AI_Cache berhasil dibuat")
     }
-  } catch { /* abaikan jika gagal */ }
+    return true
+  } catch (e: any) {
+    console.error("[cache] ensureCacheSheet error:", e.message)
+    return false
+  }
 }
 
-/** Simpan satu entry ke baris di sheet AI_Cache */
-async function writeToSheet(key: string, entry: CacheEntry<unknown>) {
+/** Simpan entry ke sheet AI_Cache */
+async function writeToSheet(key: string, entry: CacheEntry<unknown>): Promise<void> {
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID
+  if (!spreadsheetId) {
+    console.error("[cache] GOOGLE_SHEET_ID tidak tersedia")
+    return
+  }
+
   try {
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID!
-    const auth          = getAuth()
-    const sheets        = google.sheets({ version: "v4", auth })
+    const sheets = await getSheets()
     await ensureCacheSheet(sheets, spreadsheetId)
 
-    // Baca semua baris untuk cari baris yang sudah ada dengan key ini
+    // Baca kolom A untuk cari baris existing
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: `${CACHE_SHEET}!A:A`,
     })
     const rows   = res.data.values ?? []
-    const rowIdx = rows.findIndex(r => r[0] === key)
+    const rowIdx = rows.findIndex((r: string[]) => r[0] === key)
     const rowNum = rowIdx >= 0 ? rowIdx + 1 : rows.length + 1
 
     const value = JSON.stringify({
@@ -85,44 +95,51 @@ async function writeToSheet(key: string, entry: CacheEntry<unknown>) {
       valueInputOption: "RAW",
       requestBody     : { values: [[key, value]] },
     })
-  } catch (e) {
-    console.error("[cache] writeToSheet error:", e)
+    console.log(`[cache] Berhasil tulis key "${key}" ke baris ${rowNum}`)
+  } catch (e: any) {
+    console.error("[cache] writeToSheet error:", e.message)
   }
 }
 
-/** Baca semua entry dari sheet AI_Cache ke memory */
+/** Load semua entry dari sheet AI_Cache ke memory */
 async function loadFromSheet(): Promise<void> {
-  try {
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID!
-    const auth          = getAuth()
-    const sheets        = google.sheets({ version: "v4", auth })
+  const spreadsheetId = process.env.GOOGLE_SHEET_ID
+  if (!spreadsheetId) return
 
-    const res = await sheets.spreadsheets.values.get({
+  try {
+    const sheets = await getSheets()
+    const res    = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: `${CACHE_SHEET}!A:B`,
     })
     const rows = res.data.values ?? []
+    let loaded = 0
     for (const [key, value] of rows) {
       if (!key || !value) continue
       try {
         const entry = JSON.parse(value) as CacheEntry<unknown>
         store.set(key, entry)
+        loaded++
       } catch { /* skip baris rusak */ }
     }
-  } catch {
-    /* Sheet belum ada atau error — abaikan, pakai memory kosong */
+    if (loaded > 0) console.log(`[cache] Loaded ${loaded} entries dari sheet AI_Cache`)
+  } catch (e: any) {
+    // Sheet belum ada = normal untuk pertama kali
+    if (!e.message?.includes("Unable to parse range")) {
+      console.error("[cache] loadFromSheet error:", e.message)
+    }
   }
 }
 
-// Flag agar loadFromSheet hanya dipanggil sekali per cold start
 let _loaded = false
-async function ensureLoaded() {
+async function ensureLoaded(): Promise<void> {
   if (_loaded) return
   _loaded = true
   await loadFromSheet()
 }
 
 // ── Public API ────────────────────────────────────────────────────
+
 export async function cacheGet<T>(key: string): Promise<CacheEntry<T> | null> {
   await ensureLoaded()
   return (store.get(key) as CacheEntry<T>) ?? null
@@ -139,8 +156,10 @@ export async function cacheSet<T>(
     cached_by: cachedBy,
   }
   store.set(key, entry)
-  // Simpan ke Sheets di background — tidak await agar response tetap cepat
-  writeToSheet(key, entry).catch(console.error)
+  // Tulis ke Sheets di background — tidak blok response
+  writeToSheet(key, entry as CacheEntry<unknown>).catch(e =>
+    console.error("[cache] background write error:", e.message)
+  )
   return entry
 }
 
