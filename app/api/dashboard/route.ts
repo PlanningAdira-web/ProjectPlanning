@@ -9,43 +9,30 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 const KEY = CACHE_KEYS.DASHBOARD
 
-/**
- * Parse JSON dari respons Claude yang mungkin dibungkus markdown.
- * Handles: ```json {...} ```, plain {...}, atau teks + {...}
- */
 function parseClaudeJSON(raw: string): Record<string, unknown> {
   if (!raw || raw.trim().length === 0) return {}
-
-  // Step 1: hapus backtick markdown (semua variasi)
+  // Hapus backtick markdown (semua variasi)
   let s = raw
-  s = s.split("```json").join("")
-  s = s.split("```JSON").join("")
-  s = s.split("```").join("")
-  s = s.trim()
-
-  // Step 2: cari blok JSON dengan mencari { ... }
-  const firstBrace = s.indexOf("{")
-  const lastBrace  = s.lastIndexOf("}")
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return {}
-
-  const jsonStr = s.slice(firstBrace, lastBrace + 1)
-
-  // Step 3: parse
+    .split("```json").join("")
+    .split("```JSON").join("")
+    .split("```").join("")
+    .trim()
+  // Ambil dari { pertama ke } terakhir
+  const first = s.indexOf("{")
+  const last  = s.lastIndexOf("}")
+  if (first === -1 || last === -1 || last <= first) return {}
   try {
-    const result = JSON.parse(jsonStr)
+    const result = JSON.parse(s.slice(first, last + 1))
     if (typeof result === "object" && result !== null) return result
     return {}
-  } catch {
-    return {}
-  }
+  } catch { return {} }
 }
 
-// Prompt eksplisit melarang markdown
 const PROMPT = `Kamu adalah AI Production Planning Analyst untuk PT Adira Semesta Industry.
 
-PENTING: Kembalikan HANYA objek JSON murni. DILARANG menggunakan backtick, markdown, atau teks apapun selain JSON.
+PENTING: Kembalikan HANYA objek JSON. TIDAK BOLEH ada backtick, markdown, atau teks lain.
 
-Analisa data produksi yang diberikan dan kembalikan objek JSON dengan struktur PERSIS seperti ini:
+Analisa data produksi dan kembalikan JSON dengan struktur ini:
 
 {
   "kpi_score": 0.0,
@@ -58,39 +45,17 @@ Analisa data produksi yang diberikan dan kembalikan objek JSON dengan struktur P
   "planning_risk_level": "RENDAH",
   "mp_shortage": 0,
   "capacity_by_style": [
-    {
-      "style": "nama style",
-      "order_pcs": 0,
-      "produksi_pcs": 0,
-      "sisa_pcs": 0,
-      "pct": 0,
-      "status": "On Track"
-    }
+    {"style":"nama style","order_pcs":0,"produksi_pcs":0,"sisa_pcs":0,"pct":0,"status":"On Track"}
   ],
   "material_incomplete": [
-    {
-      "spo": "0000/26",
-      "style": "nama style",
-      "kekurangan": "nama material",
-      "dst_date": "DD Mon"
-    }
+    {"spo":"0000/26","style":"nama","kekurangan":"material","dst_date":"DD Mon"}
   ],
   "todo_ai": [
-    {
-      "text": "tindakan konkret yang harus dilakukan hari ini",
-      "priority": "urgent"
-    }
+    {"text":"tindakan konkret hari ini","priority":"urgent"}
   ]
 }
 
-Aturan:
-- Gunakan angka aktual dari data, bukan 0
-- planning_risk_level: "TINGGI", "SEDANG", atau "RENDAH"
-- status capacity_by_style: "Selesai", "On Track", "Perlu Perhatian", atau "Kritis"
-- priority todo_ai: "urgent" atau "normal"
-- Maksimal 5 item per array
-- JANGAN tambahkan field lain di luar struktur di atas
-- JANGAN gunakan backtick atau markdown apapun`
+Gunakan data aktual. Maksimal 5 item per array. Tidak boleh ada field tambahan.`
 
 export async function GET(req: NextRequest) {
   const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1"
@@ -101,40 +66,53 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Login diperlukan" }, { status: 401 })
     if (!can(user.role, "canRefreshAI"))
       return NextResponse.json(
-        { error: `Role "${user.role}" tidak dapat refresh analisis` },
+        { error: `Role "${user.role}" tidak dapat refresh` },
         { status: 403 }
       )
 
     try {
-      // 1. Ambil data spreadsheet
+      // 1. Baca spreadsheet
       const sheetsData = await getAllSheetsData()
-      if (!sheetsData || Object.keys(sheetsData).length === 0) {
+      const sheetNames = Object.keys(sheetsData ?? {})
+
+      if (!sheetsData || sheetNames.length === 0) {
         return NextResponse.json(
-          { error: "Gagal membaca data dari Google Sheets. Periksa koneksi service account." },
+          { error: "Gagal membaca Google Sheets. Periksa GOOGLE_SHEET_ID dan service account." },
           { status: 500 }
         )
       }
 
-      // 2. Konversi ke CSV untuk Claude
+      // 2. Konversi ke format Claude
       const csv = toClaudeCSV(sheetsData)
 
       // 3. Kirim ke Claude
-      const raw = await askClaude(PROMPT, csv)
-
-      // 4. Parse JSON dari respons Claude
-      const kpi = parseClaudeJSON(raw)
-
-      if (Object.keys(kpi).length === 0) {
+      let raw = ""
+      try {
+        raw = await askClaude(PROMPT, csv)
+      } catch (claudeErr: any) {
         return NextResponse.json(
           {
-            error : "Gagal membaca respons AI. Silakan coba refresh kembali.",
-            debug : raw.slice(0, 300),
+            error: `Gagal memanggil Claude API: ${claudeErr.message}`,
+            hint : "Periksa ANTHROPIC_API_KEY di Vercel Environment Variables, dan pastikan kredit Anthropic tidak habis.",
           },
           { status: 500 }
         )
       }
 
-      // 5. Simpan ke cache (memory + sheet AI_Cache)
+      // 4. Parse JSON
+      const kpi = parseClaudeJSON(raw)
+
+      if (Object.keys(kpi).length === 0) {
+        return NextResponse.json(
+          {
+            error: "Format respons AI tidak valid. Silakan coba refresh kembali.",
+            debug: raw.slice(0, 500),
+          },
+          { status: 500 }
+        )
+      }
+
+      // 5. Simpan cache
       const entry = await cacheSet(KEY, kpi, user.username)
       const info  = await cacheInfo(KEY)
 
@@ -143,7 +121,7 @@ export async function GET(req: NextRequest) {
     } catch (e: any) {
       return NextResponse.json(
         {
-          error : e.message ?? "Unknown error saat refresh",
+          error : e.message ?? "Unknown error",
           detail: e.stack?.split("\n").slice(0, 3).join(" | ") ?? "",
         },
         { status: 500 }
@@ -151,13 +129,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Baca dari cache
+  // Baca cache
   const entry = await cacheGet<any>(KEY)
   if (!entry) {
     return NextResponse.json({
       _cache: {
         has_cache: false,
-        message  : "Belum ada analisis. Admin/Analyst perlu klik Refresh Analisis AI.",
+        message  : "Belum ada analisis. Admin perlu klik Refresh Analisis AI.",
       },
     })
   }
