@@ -11,14 +11,15 @@ const KEY = CACHE_KEYS.DASHBOARD
 
 function safeJSON(s: string) {
   try {
-    const clean = s
+    // Hapus semua variasi markdown code block yang mungkin dikembalikan Claude
+    let clean = s
       .replace(/```json\s*/gi, "")
       .replace(/```\s*/g, "")
       .trim()
-    // Ambil substring JSON pertama yang valid
+    // Ambil dari { pertama sampai } terakhir
     const start = clean.indexOf("{")
     const end   = clean.lastIndexOf("}")
-    if (start === -1 || end === -1) return {}
+    if (start === -1 || end === -1 || end <= start) return {}
     return JSON.parse(clean.slice(start, end + 1))
   } catch { return {} }
 }
