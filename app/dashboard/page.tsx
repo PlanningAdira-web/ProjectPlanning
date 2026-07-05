@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "vis"|"sim"|"ai"
+type Page  = "todo"|"vis"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -34,7 +34,7 @@ const C = {
 // -- Main component -----------------------------------------------
 export default function DashboardPage() {
   const router = useRouter()
-  const [page,       setPage]       = useState<Page>("vis")
+  const [page,       setPage]       = useState<Page>("todo")
   const [user,       setUser]       = useState<User|null>(null)
   const [perms,      setPerms]      = useState<Perms>({ canRefreshAI:false, canChat:false, canBalancing:false, canToggleAI:false, canTodo:false })
   const [kpi,        setKpi]        = useState<any>({})
@@ -43,6 +43,8 @@ export default function DashboardPage() {
   const [todos,      setTodos]      = useState<Todo[]>([])
   const [newTodo,    setNewTodo]    = useState("")
   const [showAddTodo,setShowAddTodo]= useState(false)
+  const [todoPageData,  setTodoPageData]  = useState<any>(null)
+  const [todoPageLoading,setTodoPageLoading] = useState(false)
   const [aiMsgs,     setAiMsgs]    = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
   const [aiInput,    setAiInput]   = useState("")
   const [aiTyping,   setAiTyping]  = useState(false)
@@ -87,6 +89,17 @@ export default function DashboardPage() {
   }, [])
 
 
+
+  useEffect(function() {
+    if (page !== "todo") return
+    if (todoPageData) return
+    setTodoPageLoading(true)
+    fetch("/api/todo-page")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setTodoPageData(d.data) })
+      .catch(function() {})
+      .finally(function() { setTodoPageLoading(false) })
+  }, [page, todoPageData])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -324,6 +337,7 @@ export default function DashboardPage() {
       {/* Tabs */}
       <div style={{ background:C.gdark, padding:"0 16px", display:"flex", borderTop:"1px solid rgba(255,255,255,.12)", flexShrink:0 }}>
         {([
+          ["todo","Planning To-Do & Concern"],
           ["vis","Dashboard Planning"],
           ["sim","Planning Simulation"],
           ["ai","AI Planning Assistant"],
@@ -339,60 +353,179 @@ export default function DashboardPage() {
       {/* Content */}
       <div style={{ flex:1, overflowY:"auto", padding:"14px 16px" }}>
 
+        {/* == PLANNING TO-DO & CONCERN == */}
+        {page==="todo" && (
+          <div>
+            {todoPageLoading && (
+              <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+                Memuat data dari spreadsheet...
+              </div>
+            )}
+
+            {!todoPageLoading && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+
+                {/* Plan To-Do */}
+                <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
+                  <div style={{ background:C.gdark, padding:"8px 12px", display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Plan To-Do Hari Ini</span>
+                    <span style={{ color:"#a5d6a7", fontSize:9, marginLeft:"auto" }}>{new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</span>
+                  </div>
+                  <div style={{ padding:"10px 12px" }}>
+                    <TodoList/>
+                  </div>
+                </div>
+
+                {/* Concern Planning dari sheet Alerts */}
+                <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
+                  <div style={{ background:"#e65100", padding:"8px 12px", display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Concern Planning</span>
+                    <span style={{ color:"#ffcc80", fontSize:9, marginLeft:"auto" }}>
+                      {todoPageData?.alerts?.length ?? 0} item aktif
+                    </span>
+                  </div>
+                  <div style={{ overflowY:"auto", maxHeight:420 }}>
+                    {!todoPageData ? (
+                      <div style={{ padding:12, fontSize:11, color:C.tx3, textAlign:"center" }}>Memuat data alerts...</div>
+                    ) : todoPageData.alerts.length === 0 ? (
+                      <div style={{ padding:16, fontSize:11, color:C.tx3, textAlign:"center" }}>
+                        Tidak ada concern aktif
+                      </div>
+                    ) : (
+                      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:10 }}>
+                        <thead>
+                          <tr>
+                            {["SPO","Style","Start DST","Concern"].map(function(h) {
+                              return (
+                                <th key={h} style={{ background:"#bf360c", color:"#fff", padding:"5px 8px", textAlign:"left", fontWeight:500, fontSize:9, whiteSpace:"nowrap" }}>
+                                  {h}
+                                </th>
+                              )
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {todoPageData.alerts.map(function(a: any, i: number) {
+                            return (
+                              <tr key={i} style={{ background:i%2===0?"#fff":"#fff8f5" }}>
+                                <td style={{ padding:"6px 8px", borderBottom:"0.5px solid #ffe0cc", fontWeight:500, color:C.org, whiteSpace:"nowrap" }}>{a.spo || "--"}</td>
+                                <td style={{ padding:"6px 8px", borderBottom:"0.5px solid #ffe0cc", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.style}>{a.style || "--"}</td>
+                                <td style={{ padding:"6px 8px", borderBottom:"0.5px solid #ffe0cc", whiteSpace:"nowrap", color:C.red, fontWeight:500 }}>{a.start_dst || "--"}</td>
+                                <td style={{ padding:"6px 8px", borderBottom:"0.5px solid #ffe0cc", color:C.tx2, fontStyle:"italic" }}>{a.concern || "--"}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                  {todoPageData && (
+                    <div style={{ padding:"6px 10px", fontSize:9, color:C.tx3, borderTop:"0.5px solid #ffe0cc", display:"flex", justifyContent:"space-between" }}>
+                      <span>Dari sheet: Alerts (status bukan Done/Selesai/Complete)</span>
+                      <span>{todoPageData.fetched_at}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Status Analisis AI - KPI & Scorecard */}
+                <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
+                  <div style={{ background:C.gdark, padding:"8px 12px" }}>
+                    <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Status Analisis AI</span>
+                  </div>
+                  <div style={{ padding:"12px 14px" }}>
+
+                    {/* KPI Score & Scorecard dari sheet KPI&Scorecard */}
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".04em", textTransform:"uppercase", marginBottom:8 }}>KPI & Scorecard</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                        <div style={{ background:C.bg, borderRadius:8, padding:"12px", textAlign:"center", borderLeft:"3px solid " + C.teal }}>
+                          <div style={{ fontSize:9, color:C.tx3, marginBottom:4 }}>KPI Score</div>
+                          <div style={{ fontSize:22, fontWeight:700, color:C.teal, lineHeight:1 }}>
+                            {todoPageData?.kpi?.kpi_score ?? "--"}
+                          </div>
+                          <div style={{ fontSize:9, color:C.tx3, marginTop:3 }}>dari sheet KPI&Scorecard D2</div>
+                        </div>
+                        <div style={{ background:C.bg, borderRadius:8, padding:"12px", textAlign:"center", borderLeft:"3px solid " + C.gdark }}>
+                          <div style={{ fontSize:9, color:C.tx3, marginBottom:4 }}>Scorecard</div>
+                          <div style={{ fontSize:22, fontWeight:700, color:C.gdark, lineHeight:1 }}>
+                            {todoPageData?.kpi?.scorecard ?? "--"}
+                          </div>
+                          <div style={{ fontSize:9, color:C.tx3, marginTop:3 }}>dari sheet KPI&Scorecard K2</div>
+                        </div>
+                      </div>
+                      {todoPageData?.kpi?.fetched_at && (
+                        <div style={{ fontSize:9, color:C.tx3, textAlign:"center" }}>
+                          Data diambil: {todoPageData.kpi.fetched_at}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* KPI dari AI analysis */}
+                    <div style={{ borderTop:"0.5px solid #c8e6c9", paddingTop:10 }}>
+                      <div style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".04em", textTransform:"uppercase", marginBottom:8 }}>Hasil Analisis AI</div>
+                      {cache?.has_cache ? (
+                        <div>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
+                            {[
+                              { label:"Outstanding SPO",  val:kpi.outstanding_spo_pcs ? Number(kpi.outstanding_spo_pcs).toLocaleString("id-ID")+" pcs" : "--", color:C.org },
+                              { label:"WIP > 1 Minggu",   val:kpi.wip_over_1week_pcs  ? Number(kpi.wip_over_1week_pcs).toLocaleString("id-ID")+" pcs"  : "--", color:C.red },
+                              { label:"Lines at Risk",    val:kpi.lines_at_risk != null ? String(kpi.lines_at_risk)+" line" : "--", color:C.red },
+                              { label:"Risk Level",       val:kpi.planning_risk_level ?? "--", color:kpi.planning_risk_level==="TINGGI"?C.red:kpi.planning_risk_level==="SEDANG"?C.org:C.gdark },
+                            ].map(function(k) {
+                              return (
+                                <div key={k.label} style={{ background:C.bg, borderRadius:6, padding:"7px 8px" }}>
+                                  <div style={{ fontSize:9, color:C.tx3, marginBottom:2 }}>{k.label}</div>
+                                  <div style={{ fontSize:12, fontWeight:500, color:k.color }}>{k.val}</div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <div style={{ fontSize:9, color:C.tx3, background:C.bg, borderRadius:6, padding:"6px 8px" }}>
+                            Update AI: <strong style={{ color:C.gdark }}>{cache.cached_at}</strong> oleh <strong style={{ color:C.gdark }}>{cache.cached_by}</strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize:11, color:C.tx3, textAlign:"center", padding:"12px 0" }}>
+                          {perms.canRefreshAI ? "Klik Refresh Analisis AI." : "Menunggu Admin refresh pagi ini."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
+
         {/* == DASHBOARD PLANNING == */}
         {page==="vis" && (
           <div>
-            {/* Todo + KPI di atas Looker */}
+            {/* Info ringkas di atas Looker */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-              {/* Todo */}
+              {/* Info cache ringkas */}
               <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
-                <div style={{ background:C.gdark, padding:"8px 12px", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Plan to-do hari ini</span>
-                  <span style={{ color:"#a5d6a7", fontSize:9, marginLeft:"auto" }}>{new Date().toLocaleDateString("id-ID",{day:"2-digit",month:"short",year:"numeric"})}</span>
+                <div style={{ background:C.gdark, padding:"8px 12px" }}>
+                  <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Info update terakhir</span>
                 </div>
-                <div style={{ padding:"10px 12px" }}>
-                  <TodoList/>
-                </div>
-              </div>
-              {/* KPI */}
-              <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
-                <div style={{ background:C.gdark, padding:"8px 12px", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Status analisis AI</span>
-                </div>
-                <div style={{ padding:"12px 14px" }}>
+                <div style={{ padding:"12px 14px", fontSize:11, color:C.tx3 }}>
                   {cache?.has_cache ? (
                     <div>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-                        {[
-                          { label:"KPI Score",       val:kpi.kpi_score       ? kpi.kpi_score+"%"       : "--", color:C.teal },
-                          { label:"Scorecard",        val:kpi.scorecard_score ? kpi.scorecard_score+"%"  : "--", color:C.gdark },
-                          { label:"Outstanding SPO",  val:kpi.outstanding_spo_pcs ? Number(kpi.outstanding_spo_pcs).toLocaleString("id-ID")+" pcs" : "--", color:C.org },
-                          { label:"WIP > 1 Minggu",   val:kpi.wip_over_1week_pcs  ? Number(kpi.wip_over_1week_pcs).toLocaleString("id-ID")+" pcs"  : "--", color:C.red },
-                        ].map(function(k) {
-                          return (
-                            <div key={k.label} style={{ background:C.bg, borderRadius:6, padding:"8px 10px" }}>
-                              <div style={{ fontSize:9, color:C.tx3, marginBottom:2 }}>{k.label}</div>
-                              <div style={{ fontSize:14, fontWeight:500, color:k.color }}>{k.val}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div style={{ fontSize:10, color:C.tx3, background:C.bg, borderRadius:6, padding:"7px 10px" }}>
-                        <div>Update: <strong style={{ color:C.gdark }}>{cache.cached_at}</strong> - oleh <strong style={{ color:C.gdark }}>{cache.cached_by}</strong></div>
-                        {kpi.planning_risk_level && (
-                          <div style={{ marginTop:5, display:"flex", alignItems:"center", gap:5 }}>
-                            Risk level:
-                            <span style={{ fontSize:9, padding:"1px 8px", borderRadius:8, fontWeight:500,
-                              background:kpi.planning_risk_level==="TINGGI"?C.rdp:kpi.planning_risk_level==="SEDANG"?C.orp:C.gpale,
-                              color:kpi.planning_risk_level==="TINGGI"?C.red:kpi.planning_risk_level==="SEDANG"?C.org:C.gdark
-                            }}>{kpi.planning_risk_level}</span>
-                          </div>
-                        )}
-                      </div>
+                      <div style={{ marginBottom:6 }}>Update: <strong style={{ color:C.gdark }}>{cache.cached_at}</strong></div>
+                      <div style={{ marginBottom:6 }}>Oleh: <strong style={{ color:C.gdark }}>{cache.cached_by}</strong></div>
+                      {kpi.planning_risk_level && (
+                        <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:8 }}>
+                          <span>Risk level:</span>
+                          <span style={{ fontSize:9, padding:"2px 10px", borderRadius:8, fontWeight:500,
+                            background:kpi.planning_risk_level==="TINGGI"?C.rdp:kpi.planning_risk_level==="SEDANG"?C.orp:C.gpale,
+                            color:kpi.planning_risk_level==="TINGGI"?C.red:kpi.planning_risk_level==="SEDANG"?C.org:C.gdark
+                          }}>{kpi.planning_risk_level}</span>
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div style={{ fontSize:11, color:C.tx3, textAlign:"center", padding:"20px 0" }}>
-                      {perms.canRefreshAI ? "Klik Refresh Analisis AI untuk generate analisis." : "Menunggu Admin melakukan refresh pagi ini."}
+                    <div style={{ textAlign:"center", padding:"16px 0" }}>
+                      {perms.canRefreshAI ? "Klik Refresh Analisis AI." : "Menunggu Admin refresh pagi ini."}
                     </div>
                   )}
                 </div>
