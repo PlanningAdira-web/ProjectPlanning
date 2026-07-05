@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "vis"|"plan"|"sim"|"ai"
+type Page  = "vis"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -31,168 +31,6 @@ const C = {
 }
 
 // -- Sub-components -----------------------------------------------
-function PlanningTable(props: { planLoading: boolean; planData: any; planFactory: string }) {
-  const { planLoading, planData, planFactory } = props
-
-  if (planLoading) {
-    return (
-      <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
-        Memuat data planning dari spreadsheet...
-      </div>
-    )
-  }
-  if (!planData) {
-    return (
-      <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
-        Gagal memuat data planning. Pastikan sheet Data_Plan_DST tersedia.
-      </div>
-    )
-  }
-
-  const rows: any[]    = planData.rows[planFactory] ?? []
-  const dates: string[]= planData.dateHeaders ?? []
-  const today          = new Date()
-
-  const currWeekDates = new Set(
-    dates.filter(function(d: string) {
-      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-      const parts  = d.split("-")
-      const mIdx   = months.findIndex(function(m: string) { return m === parts[1] })
-      const dt     = new Date(today.getFullYear(), mIdx, parseInt(parts[0]))
-      const diff   = (dt.getTime() - today.getTime()) / 86400000
-      return diff >= 0 && diff < 7
-    })
-  )
-
-  const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
-
-  const stickyCell = function(l: number, bg: string, extra: any) {
-    return Object.assign({
-      padding:"5px 8px",
-      borderBottom:"0.5px solid #e0ece0",
-      borderRight:"0.5px solid #c8e6c9",
-      background:bg,
-      position:"sticky",
-      left:l,
-      zIndex:1,
-      whiteSpace:"nowrap",
-    }, extra || {})
-  }
-
-  const headerCols: { h:string; w:number; a:"left"|"center"|"right"; l:number }[] = [
-    { h:"Line",     w:46,  a:"left",   l:0   },
-    { h:"SPO",      w:74,  a:"left",   l:46  },
-    { h:"Style",    w:172, a:"left",   l:120 },
-    { h:"Note",     w:112, a:"left",   l:292 },
-    { h:"Priority", w:88,  a:"center", l:404 },
-  ]
-
-  return (
-    <div>
-      <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9" }}>
-        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
-          <thead>
-            <tr>
-              {headerCols.map(function(col, i) {
-                return (
-                  <th key={i} style={{
-                    background: i===4 ? "#1b4d24" : C.gdark,
-                    color:"#fff",
-                    padding:"6px 8px",
-                    fontWeight:500,
-                    whiteSpace:"nowrap",
-                    position:"sticky",
-                    top:0,
-                    left:col.l,
-                    zIndex:5+i,
-                    minWidth:col.w,
-                    textAlign:col.a,
-                    borderRight: i===4 ? "2px solid rgba(255,255,255,.3)" : "0.5px solid rgba(255,255,255,.15)",
-                    borderBottom:"1px solid rgba(255,255,255,.2)",
-                  }}>
-                    {col.h}
-                  </th>
-                )
-              })}
-              {dates.map(function(d: string) {
-                return (
-                  <th key={d} style={{
-                    background: currWeekDates.has(d) ? "#2e7d32" : C.gdark,
-                    color:"#fff",
-                    padding:"6px 8px",
-                    fontWeight:500,
-                    whiteSpace:"nowrap",
-                    position:"sticky",
-                    top:0,
-                    zIndex:2,
-                    minWidth:58,
-                    textAlign:"center",
-                    borderRight:"0.5px solid rgba(255,255,255,.1)",
-                    borderBottom:"1px solid rgba(255,255,255,.2)",
-                  }}>
-                    {d}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map(function(line: any, li: number) {
-              const lineRows = rows.filter(function(r: any) { return r.line === line })
-              const bg     = li % 2 === 0 ? "#e8f5e9" : "#fff"
-              const bgCurr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
-              return lineRows.map(function(row: any, ri: number) {
-                return (
-                  <tr key={String(li) + "-" + String(ri)}>
-                    <td style={stickyCell(0, bg, { textAlign:"left", minWidth:46 })}>
-                      {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
-                    </td>
-                    <td style={stickyCell(46, bg, { textAlign:"left", minWidth:74 })}>{row.spo}</td>
-                    <td style={stickyCell(120, bg, { textAlign:"left", minWidth:172, maxWidth:172, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
-                    <td style={stickyCell(292, bg, { textAlign:"left", minWidth:112, fontStyle:"italic", color:C.tx3 })}>{row.note || "--"}</td>
-                    <td style={Object.assign(stickyCell(404, bg, {}), { borderRight:"2px solid #c8e6c9", textAlign:"center", minWidth:88 })}>
-                      {!row.priority
-                        ? <span style={{ color:"#9e9e9e" }}>--</span>
-                        : (row.priority.toLowerCase()==="ka" || row.priority.toLowerCase()==="ki")
-                          ? <span style={{ background:C.rdp, color:C.red, fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>{row.priority}</span>
-                          : row.priority.toLowerCase()==="lad"
-                            ? <span style={{ background:C.blp, color:C.blue, fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>Lad</span>
-                            : <span style={{ fontSize:10, color:C.tx2 }}>{row.priority}</span>
-                      }
-                    </td>
-                    {dates.map(function(d: string) {
-                      const val    = row.dates[d]
-                      const cellBg = currWeekDates.has(d) ? bgCurr : bg
-                      return (
-                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.35)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
-                          {val === "F"
-                            ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
-                            : (val !== "" && val !== undefined && val !== null)
-                              ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(val).toLocaleString("id-ID")}</span>
-                              : null
-                          }
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div style={{ marginTop:8, fontSize:9, color:C.tx3, display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
-        <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
-        <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
-        <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
-        <span style={{ color:C.red, fontWeight:700 }}>F</span>
-        <span>= Akhir planning SPO</span>
-        <span style={{ marginLeft:"auto" }}>Scroll kanan untuk lihat semua tanggal</span>
-      </div>
-    </div>
-  )
-}
-
 // -- Main component -----------------------------------------------
 export default function DashboardPage() {
   const router = useRouter()
@@ -205,9 +43,6 @@ export default function DashboardPage() {
   const [todos,      setTodos]      = useState<Todo[]>([])
   const [newTodo,    setNewTodo]    = useState("")
   const [showAddTodo,setShowAddTodo]= useState(false)
-  const [planData,   setPlanData]   = useState<any>(null)
-  const [planFactory,setPlanFactory]= useState("A")
-  const [planLoading,setPlanLoading]= useState(false)
   const [aiMsgs,     setAiMsgs]    = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
   const [aiInput,    setAiInput]   = useState("")
   const [aiTyping,   setAiTyping]  = useState(false)
@@ -251,15 +86,7 @@ export default function DashboardPage() {
     fetch("/api/todo").then(function(r) { return r.json() }).then(function(d) { setTodos(d.items ?? []) }).catch(function() {})
   }, [])
 
-  useEffect(function() {
-    if (page !== "plan" || planData) return
-    setPlanLoading(true)
-    fetch("/api/planning")
-      .then(function(r) { return r.json() })
-      .then(function(d) { if (d.ok) setPlanData(d.data) })
-      .catch(function() {})
-      .finally(function() { setPlanLoading(false) })
-  }, [page, planData])
+
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -281,7 +108,6 @@ export default function DashboardPage() {
       const rest = Object.assign({}, d)
       delete rest._cache
       setKpi(rest); setCache(_cache)
-      setPlanData(null)
       if (d.todo_ai && d.todo_ai.length > 0) {
         await fetch("/api/todo", { method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ action:"sync_ai", items:d.todo_ai }) })
@@ -499,7 +325,6 @@ export default function DashboardPage() {
       <div style={{ background:C.gdark, padding:"0 16px", display:"flex", borderTop:"1px solid rgba(255,255,255,.12)", flexShrink:0 }}>
         {([
           ["vis","Dashboard Planning"],
-          ["plan","Planning"],
           ["sim","Planning Simulation"],
           ["ai","AI Planning Assistant"],
         ] as [Page,string][]).map(function([p,label]) {
@@ -517,18 +342,8 @@ export default function DashboardPage() {
         {/* == DASHBOARD PLANNING == */}
         {page==="vis" && (
           <div>
-            <div style={{ padding:"10px 0", borderBottom:"0.5px solid #c8e6c9", display:"flex", alignItems:"center", gap:10, marginBottom:0, flexShrink:0 }}>
-              <span style={{ fontSize:13, fontWeight:500, color:C.gdark }}>Dashboard Planning</span>
-              <span style={{ fontSize:10, background:C.blp, color:C.blue, padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Looker Studio</span>
-              <span style={{ fontSize:10, color:C.tx3, marginLeft:"auto" }}>Data dari Google Sheets - 0 token</span>
-              <a href={LOOKER_FULL} target="_blank" rel="noreferrer"
-                style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"0.5px solid #c8e6c9", background:C.bg, color:C.tx2, textDecoration:"none", fontSize:11 }}>
-                Buka fullscreen
-              </a>
-            </div>
-            <iframe src={LOOKER_EMBED} width="100%" height="480" style={{ border:"none", display:"block" }} allowFullScreen title="Dashboard Planning"/>
-
-            <div style={{ marginTop:14, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {/* Todo + KPI di atas Looker */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
               {/* Todo */}
               <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
                 <div style={{ background:C.gdark, padding:"8px 12px", display:"flex", alignItems:"center", gap:6 }}>
@@ -583,29 +398,18 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* == PLANNING == */}
-        {page==="plan" && (
-          <div>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Planning - Data_Plan_DST</span>
-              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                {planData?.factories?.map(function(f: string) {
-                  return (
-                    <button key={f} onClick={function() { setPlanFactory(f) }}
-                      style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
-                        background:planFactory===f?C.gdark:"#fff",
-                        color:planFactory===f?"#fff":C.tx2, cursor:"pointer" }}>
-                      Factory {f}
-                    </button>
-                  )
-                })}
-                {planData && <span style={{ fontSize:9, color:C.tx3, marginLeft:4 }}>Update: {planData.cached_at}</span>}
-              </div>
+            {/* Toolbar Looker */}
+            <div style={{ padding:"8px 0", borderBottom:"0.5px solid #c8e6c9", display:"flex", alignItems:"center", gap:10, marginBottom:0 }}>
+              <span style={{ fontSize:13, fontWeight:500, color:C.gdark }}>Dashboard Planning</span>
+              <span style={{ fontSize:10, background:C.blp, color:C.blue, padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Looker Studio</span>
+              <span style={{ fontSize:10, color:C.tx3, marginLeft:"auto" }}>Data dari Google Sheets - 0 token</span>
+              <a href={LOOKER_FULL} target="_blank" rel="noreferrer"
+                style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"0.5px solid #c8e6c9", background:C.bg, color:C.tx2, textDecoration:"none", fontSize:11 }}>
+                Buka fullscreen
+              </a>
             </div>
-            <PlanningTable planLoading={planLoading} planData={planData} planFactory={planFactory}/>
+            <iframe src={LOOKER_EMBED} width="100%" height="520" style={{ border:"none", display:"block" }} allowFullScreen title="Dashboard Planning"/>
           </div>
         )}
 
