@@ -501,36 +501,7 @@ export default function DashboardPage() {
         {/* == DASHBOARD PLANNING == */}
         {page==="vis" && (
           <div>
-            {/* Info ringkas di atas Looker */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-              {/* Info cache ringkas */}
-              <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
-                <div style={{ background:C.gdark, padding:"8px 12px" }}>
-                  <span style={{ color:"#fff", fontSize:11, fontWeight:500 }}>Info update terakhir</span>
-                </div>
-                <div style={{ padding:"12px 14px", fontSize:11, color:C.tx3 }}>
-                  {cache?.has_cache ? (
-                    <div>
-                      <div style={{ marginBottom:6 }}>Update: <strong style={{ color:C.gdark }}>{cache.cached_at}</strong></div>
-                      <div style={{ marginBottom:6 }}>Oleh: <strong style={{ color:C.gdark }}>{cache.cached_by}</strong></div>
-                      {kpi.planning_risk_level && (
-                        <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:8 }}>
-                          <span>Risk level:</span>
-                          <span style={{ fontSize:9, padding:"2px 10px", borderRadius:8, fontWeight:500,
-                            background:kpi.planning_risk_level==="TINGGI"?C.rdp:kpi.planning_risk_level==="SEDANG"?C.orp:C.gpale,
-                            color:kpi.planning_risk_level==="TINGGI"?C.red:kpi.planning_risk_level==="SEDANG"?C.org:C.gdark
-                          }}>{kpi.planning_risk_level}</span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign:"center", padding:"16px 0" }}>
-                      {perms.canRefreshAI ? "Klik Refresh Analisis AI." : "Menunggu Admin refresh pagi ini."}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+
 
             {/* Toolbar Looker */}
             <div style={{ padding:"8px 0", borderBottom:"0.5px solid #c8e6c9", display:"flex", alignItems:"center", gap:10, marginBottom:0 }}>
