@@ -163,9 +163,9 @@ export default function DashboardPage() {
       if (d.error) {
         // Tampilkan error + debug info jika ada
         const msg = d.hint
-          ? `${d.error}\n\nHint: ${d.hint}`
+          ? (d.error + "\n\nHint: " + d.hint)
           : d.debug
-          ? `${d.error}\n\nDebug: ${d.debug.slice(0, 200)}`
+          ? (d.error + "\n\nDebug: " + d.debug.slice(0, 200))
           : d.error
         alert(msg)
         return
@@ -247,7 +247,13 @@ export default function DashboardPage() {
   async function runAnalysis() {
     if (!bStyle || !bJenis || !bQty || !bDate) { alert("Lengkapi semua field"); return }
     setBAnalyzing(true)
-    const prompt = `Analisis ketersediaan line untuk order baru:\n- Style: ${bStyle}\n- Jenis Style: ${bJenis}\n- Qty: ${parseInt(bQty).toLocaleString()} pcs\n- Rencana F. Prod: ${bDate}\n\nSemua line yang bisa mengerjakan ${bJenis} sudah full atau ada yang tersedia? Rekomendasikan opsi balancing terbaik dengan mempertimbangkan tanggal RENCANA F. PROD di Data_Plan_DST.`
+    const prompt = "Analisis ketersediaan line untuk order baru:\n" +
+      "- Style: " + bStyle + "\n" +
+      "- Jenis Style: " + bJenis + "\n" +
+      "- Qty: " + parseInt(bQty).toLocaleString() + " pcs\n" +
+      "- Rencana F. Prod: " + bDate + "\n\n" +
+      "Semua line yang bisa mengerjakan " + bJenis + " sudah full atau ada yang tersedia? " +
+      "Rekomendasikan opsi balancing terbaik dengan mempertimbangkan tanggal RENCANA F. PROD di Data_Plan_DST."
     await sendBalancing(prompt, true)
     setBAnalyzing(false)
   }
@@ -464,10 +470,10 @@ export default function DashboardPage() {
             <div style={{ ...S.stitle, marginTop:0 }}><i className="ti ti-adjustments" aria-hidden="true" style={{ fontSize:12 }}/>Simulasi dampak</div>
             <div style={S.g4sim}>
               {[
-                { title:"Dampak perubahan demand", color:"#1a5c2a", val:simD, setVal:setSimD, min:-30, max:50, unit:"%", hint:"", prompt:`Simulasikan dampak demand berubah ${simD>=0?"+":""}${simD}% dari kondisi saat ini` },
-                { title:"Dampak kenaikan efisiensi", color:"#00695c", val:simE, setVal:setSimE, min:1, max:25, unit:"%", hint:"", prompt:`Simulasikan efisiensi semua line naik ${simE}%` },
-                { title:"Dampak overtime", color:"#e65100", val:simOT, setVal:setSimOT, min:0, max:3, unit:" jam", hint:"Maks 3 jam sesuai UU Ketenagakerjaan No.13/2003 Ps.78", prompt:`Simulasikan overtime ${simOT} jam/hari, pertimbangkan UU Ketenagakerjaan No.13/2003` },
-                { title:"Dampak penambahan/pengurangan line", color:"#c62828", val:simL, setVal:setSimL, min:-3, max:5, unit:"", hint:"", prompt:`Simulasikan perubahan ${simL>=0?"+":""}${simL} line produksi` },
+                { title:"Dampak perubahan demand", color:"#1a5c2a", val:simD, setVal:setSimD, min:-30, max:50, unit:"%", hint:"", prompt:"Simulasikan dampak demand berubah " + (simD>=0?"+":"") + simD + "% dari kondisi saat ini" },
+                { title:"Dampak kenaikan efisiensi", color:"#00695c", val:simE, setVal:setSimE, min:1, max:25, unit:"%", hint:"", prompt:"Simulasikan efisiensi semua line naik " + simE + "%" },
+                { title:"Dampak overtime", color:"#e65100", val:simOT, setVal:setSimOT, min:0, max:3, unit:" jam", hint:"Maks 3 jam sesuai UU Ketenagakerjaan No.13/2003 Ps.78", prompt:"Simulasikan overtime " + simOT + " jam/hari, pertimbangkan UU Ketenagakerjaan No.13/2003" },
+                { title:"Dampak penambahan/pengurangan line", color:"#c62828", val:simL, setVal:setSimL, min:-3, max:5, unit:"", hint:"", prompt:"Simulasikan perubahan " + (simL>=0?"+":"") + simL + " line produksi" },
               ].map(s => (
                 <div key={s.title} style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, padding:"12px 13px" }}>
                   <div style={{ fontSize:11, fontWeight:500, marginBottom:9, color:s.color }}>{s.title}</div>
