@@ -31,9 +31,9 @@ const S: Record<string,React.CSSProperties> = {
   // Tabs
   tabs:     { background:"#1a5c2a", padding:"0 16px", display:"flex", gap:0, borderTop:"1px solid rgba(255,255,255,.12)", flexShrink:0 },
   // Content
-  content:  { flex:1, overflowY:"auto" as const, padding:"14px 16px" },
+  content:  { flex:1, overflowY:"auto", padding:"14px 16px" },
   // Section title
-  stitle:   { fontSize:10, fontWeight:500, color:"#6b8f72", letterSpacing:".05em", textTransform:"uppercase" as const, marginBottom:8, marginTop:14, display:"flex", alignItems:"center", gap:5 },
+  stitle:   { fontSize:10, fontWeight:500, color:"#6b8f72", letterSpacing:".05em", textTransform:"uppercase", marginBottom:8, marginTop:14, display:"flex", alignItems:"center", gap:5 },
   // Card
   card:     { background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8 },
   cardHead: { background:"#1a5c2a", borderRadius:"8px 8px 0 0", padding:"8px 12px", display:"flex", alignItems:"center", gap:6 },
@@ -46,7 +46,7 @@ const S: Record<string,React.CSSProperties> = {
   g4sim:    { display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 },
   // Buttons
   refreshBtn: { display:"flex", alignItems:"center", gap:5, padding:"5px 14px", borderRadius:6, border:"none", color:"#fff", fontSize:11, fontWeight:500, cursor:"pointer" },
-  logoutBtn:  { display:"flex", alignItems:"center", gap:5, padding:"8px 12px", border:"none", background:"transparent", cursor:"pointer", fontSize:11, color:"#a5d6a7", width:"100%", textAlign:"left" as const },
+  logoutBtn:  { display:"flex", alignItems:"center", gap:5, padding:"8px 12px", border:"none", background:"transparent", cursor:"pointer", fontSize:11, color:"#a5d6a7", width:"100%", textAlign:"left" },
   // Chat
   chatInput:  { flex:1, padding:"9px 12px", borderRadius:"8px 0 0 8px", fontSize:12, border:"0.5px solid #c8e6c9", background:"#f4f9f4", outline:"none", fontFamily:"system-ui" },
   sendBtn:    { padding:"9px 16px", borderRadius:"0 8px 8px 0", border:"none", background:"#2e7d32", color:"#fff", fontSize:12, fontWeight:500, cursor:"pointer" },
@@ -54,7 +54,7 @@ const S: Record<string,React.CSSProperties> = {
 
 function KPICard({ label, val, sub, color="#1a5c2a", left="#4caf50" }: any) {
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, padding:"9px 11px", borderLeft:`3px solid ${left}` }}>
+    <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, padding:"9px 11px", borderLeft:("3px solid " + left) }}>
       <div style={{ fontSize:10, color:"#6b8f72", marginBottom:2 }}>{label}</div>
       <div style={{ fontSize:18, fontWeight:500, color, lineHeight:1.1 }}>{val ?? "--"}</div>
       {sub && <div style={{ fontSize:9, color:"#6b8f72", marginTop:2 }}>{sub}</div>}
@@ -69,8 +69,131 @@ function Dot({ color }: { color:string }) {
 function PBar({ pct, color }: { pct:number; color:string }) {
   return (
     <span style={{ display:"inline-block", width:64, height:5, borderRadius:3, background:"#c8e6c9", overflow:"hidden", verticalAlign:"middle", marginRight:3 }}>
-      <span style={{ display:"block", height:"100%", width:`${Math.min(pct,100)}%`, borderRadius:3, background:color }}/>
+      <span style={{ display:"block", height:"100%", width:(Math.min(pct,100) + "%"), borderRadius:3, background:color }}/>
     </span>
+  )
+}
+
+
+function PriorityBadge({ value }: { value: string }) {
+  if (!value) return <span style={{ color:"#9e9e9e", fontSize:10 }}>--</span>
+  const lo = value.toLowerCase()
+  if (lo === "ka" || lo === "ki")
+    return <span style={{ background:"#ffebee", color:"#c62828", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>{value}</span>
+  if (lo === "lad")
+    return <span style={{ background:"#e3f2fd", color:"#1565c0", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>Lad</span>
+  return <span style={{ fontSize:10, color:"#3d5a42" }}>{value}</span>
+}
+
+function QtyCell({ val }: { val: number | string | undefined }) {
+  if (val === "F") return <span style={{ color:"#c62828", fontWeight:700 }}>F</span>
+  if (val !== "" && val !== undefined && val !== null)
+    return <span style={{ color:"#1a5c2a", fontWeight:500 }}>{Number(val).toLocaleString("id-ID")}</span>
+  return null
+}
+
+function PlanningTable({ planLoading, planData, planFactory }: {
+  planLoading: boolean;
+  planData: any;
+  planFactory: string;
+}) {
+  if (planLoading) return (
+    <div style={{ padding:"32px", textAlign:"center", color:"#6b8f72", fontSize:12 }}>
+      <i className="ti ti-loader" style={{ fontSize:18, display:"block", marginBottom:8 }} aria-hidden="true"/>
+      Memuat data planning dari spreadsheet...
+    </div>
+  )
+  if (!planData) return (
+    <div style={{ padding:"24px", textAlign:"center", background:"#fff3e0", borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:"#e65100" }}>
+      <i className="ti ti-alert-triangle" style={{ fontSize:18, display:"block", marginBottom:8 }} aria-hidden="true"/>
+      Gagal memuat data planning. Pastikan sheet Data_Plan_DST tersedia.
+    </div>
+  )
+  const rows: any[]   = planData.rows[planFactory] ?? []
+  const dates: string[] = planData.dateHeaders ?? []
+  const today = new Date()
+  const currWeekDates = new Set(dates.filter((d: string) => {
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    const parts  = d.split("-")
+    const mIdx   = months.findIndex((m: string) => m === parts[1])
+    const date   = new Date(today.getFullYear(), mIdx, parseInt(parts[0]))
+    const diff   = (date.getTime() - today.getTime()) / 86400000
+    return diff >= 0 && diff < 7
+}))
+  const lines = [...new Set(rows.map((r: any) => r.line))]
+  const sc = (l: number, bg: string, extra: any = {}): React.CSSProperties => ({
+    padding:"5px 8px", borderBottom:"0.5px solid #e0ece0",
+    borderRight:"0.5px solid #c8e6c9", background:bg,
+    position:"sticky", left:l, zIndex:1, whiteSpace:"nowrap", ...extra
+  })
+  return (
+    <div>
+      <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9" }}>
+        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+          <thead>
+            <tr>
+              {([ ["Line",46,"left",0],["SPO",74,"left",46],["Style",172,"left",120],["Note",112,"left",292],["Priority",88,"center",404] ] as [string,number,string,number][]).map(([h,w,a,l],i) => (
+                <th key={i} style={{
+                  background:i===4?"#1b4d24":"#1a5c2a", color:"#fff",
+                  padding:"6px 8px", fontWeight:500, whiteSpace:"nowrap",
+                  position:"sticky", top:0, left:l, zIndex:5+i,
+                  minWidth:w, textAlign:a ,
+                  borderRight:i===4?"2px solid rgba(255,255,255,.3)":"0.5px solid rgba(255,255,255,.15)",
+                  borderBottom:"1px solid rgba(255,255,255,.2)",
+                }}>{h}</th>
+              ))}
+              {dates.map((d: string) => (
+                <th key={d} style={{
+                  background:currWeekDates.has(d)?"#2e7d32":"#1a5c2a", color:"#fff",
+                  padding:"6px 8px", fontWeight:500, whiteSpace:"nowrap",
+                  position:"sticky", top:0, zIndex:2,
+                  minWidth:58, textAlign:"center",
+                  borderRight:"0.5px solid rgba(255,255,255,.1)",
+                  borderBottom:"1px solid rgba(255,255,255,.2)",
+                }}>{d}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((line: any, li: number) => {
+              const lineRows = rows.filter((r: any) => r.line === line)
+              const bg     = li % 2 === 0 ? "#e8f5e9" : "#fff"
+              const bgCurr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
+              return lineRows.map((row: any, ri: number) => (
+                <tr key={ri}>
+                  <td style={sc(0, bg, { textAlign:"left", minWidth:46 })}>
+                    {ri===0 && <strong style={{ color:"#1a5c2a" }}>{row.line}</strong>}
+                  </td>
+                  <td style={sc(46, bg, { textAlign:"left", minWidth:74 })}>{row.spo}</td>
+                  <td style={sc(120, bg, { textAlign:"left", minWidth:172, maxWidth:172, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
+                  <td style={sc(292, bg, { textAlign:"left", minWidth:112, fontStyle:"italic", color:"#6b8f72" })}>{row.note||"--"}</td>
+                  <td style={{ ...sc(404, bg), borderRight:"2px solid #c8e6c9", textAlign:"center", minWidth:88 }}>
+                    <PriorityBadge value={row.priority} />
+                  </td>
+                  {dates.map((d: string) => {
+                    const val    = row.dates[d]
+                    const cellBg = currWeekDates.has(d) ? bgCurr : bg
+                    return (
+                      <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.35)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
+                        <QtyCell val={val} />
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop:8, fontSize:9, color:"#6b8f72", display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
+        <span style={{ color:"#c62828", fontWeight:700 }}>F</span>
+        <span>= Akhir planning SPO</span>
+        <span style={{ marginLeft:"auto" }}>Scroll -> untuk lihat semua tanggal planning</span>
+      </div>
+    </div>
   )
 }
 
@@ -239,7 +362,7 @@ export default function DashboardPage() {
       }
       // Simpan ke history
       const histLabel = (bStyle || "Balancing") + (bQty ? " - " + parseInt(bQty).toLocaleString() + " pcs" : "")
-      setBalHistory(h => [{date: new Date().toLocaleString("id-ID"), label: histLabel, msgs:[...next, { role:"assistant" as const, content:buf }]}, ...h.slice(0,9)])
+      setBalHistory(h => [{date: new Date().toLocaleString("id-ID"), label: histLabel, msgs:[...next, { role:"assistant", content:buf }]}, ...h.slice(0,9)])
     } catch { setBalMsgs([...next, { role:"assistant", content:"Gagal terhubung ke AI." }]) }
     finally { setBalTyping(false) }
   }
@@ -260,134 +383,24 @@ export default function DashboardPage() {
 
   function goChat(msg: string) { setPage("ai"); setTimeout(() => sendAI(msg), 200) }
 
-  const v = (x: any, s = "") => (x != null && x !== "") ? `${x}${s}` : "--"
+  const v = (x: any, s = "") => (x != null && x !== "") ? ("" + x + s) : "--"
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
 
   const navStyle = (p: Page): React.CSSProperties => ({
     padding:"9px 14px", fontSize:11, cursor:"pointer",
     display:"flex", alignItems:"center", gap:5, color:page===p?"#fff":"#a5d6a7", fontWeight:page===p?500:400, transition:"all .15s",
-    background:"transparent", border:"none", borderBottom:`3px solid ${page===p?"#4caf50":"transparent"}`,
+    background:"transparent", border:"none", borderBottom:(page===p ? "3px solid #4caf50" : "3px solid transparent"),
   })
 
   const msgStyle = (r: "user"|"assistant"): React.CSSProperties => ({
     alignSelf: r==="user"?"flex-end":"flex-start", maxWidth:"90%",
     background: r==="user"?"#e8f5e9":"#fff",
-    border:`0.5px solid ${r==="user"?"#a5d6a7":"#c8e6c9"}`,
+    border:(r==="user" ? "0.5px solid #a5d6a7" : "0.5px solid #c8e6c9"),
     borderRadius: r==="user"?"10px 10px 4px 10px":"10px 10px 10px 4px",
     padding:"9px 12px", fontSize:11, color:r==="user"?"#1a5c2a":"#1b2a1e",
-    lineHeight:1.65, whiteSpace:"pre-wrap" as const,
+    lineHeight:1.65, whiteSpace:"pre-wrap",
   })
 
-  // Planning table helper
-  function PlanningTable() {
-    if (planLoading) return (
-      <div style={{ padding:"32px", textAlign:"center", color:"#6b8f72", fontSize:12 }}>
-        <i className="ti ti-loader" style={{ fontSize:18, display:"block", marginBottom:8 }} aria-hidden="true"/>
-        Memuat data planning dari spreadsheet...
-      </div>
-    )
-    if (!planData) return (
-      <div style={{ padding:"24px", textAlign:"center", background:"#fff3e0", borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:"#e65100" }}>
-        <i className="ti ti-alert-triangle" style={{ fontSize:18, display:"block", marginBottom:8 }} aria-hidden="true"/>
-        Gagal memuat data planning. Pastikan sheet Data_Plan_DST tersedia.
-      </div>
-    )
-    const rows: any[]   = planData.rows[planFactory] ?? []
-    const dates: string[] = planData.dateHeaders ?? []
-    const today = new Date()
-    const currWeekDates = new Set(dates.filter((d: string) => {
-      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-      const parts  = d.split("-")
-      const mIdx   = months.findIndex((m: string) => m === parts[1])
-      const date   = new Date(today.getFullYear(), mIdx, parseInt(parts[0]))
-      const diff   = (date.getTime() - today.getTime()) / 86400000
-      return diff >= 0 && diff < 7
-    }))
-    const lines = [...new Set(rows.map((r: any) => r.line))]
-    const sc = (l: number, bg: string, extra: any = {}): React.CSSProperties => ({
-      padding:"5px 8px", borderBottom:"0.5px solid #e0ece0",
-      borderRight:"0.5px solid #c8e6c9", background:bg,
-      position:"sticky", left:l, zIndex:1, whiteSpace:"nowrap" as const, ...extra
-    })
-    return (
-      <div>
-        <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9" }}>
-          <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" as const }}>
-            <thead>
-              <tr>
-                {([ ["Line",46,"left",0],["SPO",74,"left",46],["Style",172,"left",120],["Note",112,"left",292],["Priority",88,"center",404] ] as [string,number,string,number][]).map(([h,w,a,l],i) => (
-                  <th key={i} style={{
-                    background:i===4?"#1b4d24":"#1a5c2a", color:"#fff",
-                    padding:"6px 8px", fontWeight:500, whiteSpace:"nowrap" as const,
-                    position:"sticky" as const, top:0, left:l, zIndex:5+i,
-                    minWidth:w, textAlign:a as any,
-                    borderRight:i===4?"2px solid rgba(255,255,255,.3)":"0.5px solid rgba(255,255,255,.15)",
-                    borderBottom:"1px solid rgba(255,255,255,.2)",
-                  }}>{h}</th>
-                ))}
-                {dates.map((d: string) => (
-                  <th key={d} style={{
-                    background:currWeekDates.has(d)?"#2e7d32":"#1a5c2a", color:"#fff",
-                    padding:"6px 8px", fontWeight:500, whiteSpace:"nowrap" as const,
-                    position:"sticky" as const, top:0, zIndex:2,
-                    minWidth:58, textAlign:"center",
-                    borderRight:"0.5px solid rgba(255,255,255,.1)",
-                    borderBottom:"1px solid rgba(255,255,255,.2)",
-                  }}>{d}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line: any, li: number) => {
-                const lineRows = rows.filter((r: any) => r.line === line)
-                const bg     = li % 2 === 0 ? "#e8f5e9" : "#fff"
-                const bgCurr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
-                return lineRows.map((row: any, ri: number) => (
-                  <tr key={ri}>
-                    <td style={sc(0, bg, { textAlign:"left", minWidth:46 })}>
-                      {ri===0 && <strong style={{ color:"#1a5c2a" }}>{row.line}</strong>}
-                    </td>
-                    <td style={sc(46, bg, { textAlign:"left", minWidth:74 })}>{row.spo}</td>
-                    <td style={sc(120, bg, { textAlign:"left", minWidth:172, maxWidth:172, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
-                    <td style={sc(292, bg, { textAlign:"left", minWidth:112, fontStyle:"italic", color:"#6b8f72" })}>{row.note||"--"}</td>
-                    <td style={{ ...sc(404, bg), borderRight:"2px solid #c8e6c9", textAlign:"center", minWidth:88 }}>
-                      {!row.priority ? <span style={{ color:"#9e9e9e" }}>--</span>
-                        : row.priority.toLowerCase()==="ka" || row.priority.toLowerCase()==="ki"
-                          ? <span style={{ background:"#ffebee", color:"#c62828", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>{row.priority}</span>
-                          : row.priority.toLowerCase()==="lad"
-                          ? <span style={{ background:"#e3f2fd", color:"#1565c0", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>Lad</span>
-                          : <span style={{ fontSize:10, color:"#3d5a42" }}>{row.priority}</span>}
-                    </td>
-                    {dates.map((d: string) => {
-                      const val    = row.dates[d]
-                      const cellBg = currWeekDates.has(d) ? bgCurr : bg
-                      return (
-                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.35)", background:cellBg, textAlign:"center", whiteSpace:"nowrap" as const, fontSize:10 }}>
-                          {val === "F"
-                            ? <span style={{ color:"#c62828", fontWeight:700 }}>F</span>
-                            : (val !== "" && val !== undefined)
-                              ? <span style={{ color:"#1a5c2a", fontWeight:500 }}>{Number(val).toLocaleString("id-ID")}</span>
-                              : ""}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ marginTop:8, fontSize:9, color:"#6b8f72", display:"flex", gap:14, flexWrap:"wrap" as const, alignItems:"center" }}>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
-          <span style={{ color:"#c62828", fontWeight:700 }}>F</span>
-          <span>= Akhir planning SPO</span>
-          <span style={{ marginLeft:"auto" }}>Scroll -> untuk lihat semua tanggal planning</span>
-        </div>
-      </div>
-    )
-  }
 
   if (!user) return <div style={{ height:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui", color:"#6b8f72" }}>Memuat...</div>
 
@@ -432,7 +445,7 @@ export default function DashboardPage() {
       <div style={S.tabs}>
         {([["vis","ti-chart-bar","Dashboard Planning"],["plan","ti-calendar-stats","Planning"],["sim","ti-adjustments","Planning Simulation"],["ai","ti-message-2","AI Planning Assistant"]] as [Page,string,string][]).map(([p,icon,label]) => (
           <button key={p} onClick={()=>setPage(p)} style={navStyle(p)}>
-            <i className={`ti ${icon}`} style={{ fontSize:13 }} aria-hidden="true"/>
+            <i className={"ti " + icon} style={{ fontSize:13 }} aria-hidden="true"/>
             {label}
           </button>
         ))}
@@ -461,7 +474,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <PlanningTable />
+            <PlanningTable planLoading={planLoading} planData={planData} planFactory={planFactory} />
 
         {/* == PLANNING SIMULATION == */}
         {page==="sim" && (
@@ -557,7 +570,7 @@ export default function DashboardPage() {
                   ))}
                   {balTyping && balMsgs[balMsgs.length-1]?.role!=="assistant" && (
                     <div style={{ alignSelf:"flex-start", fontSize:10, color:"#6b8f72", display:"flex", gap:3 }}>
-                      {[0,1,2].map(i=><span key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#4caf50", display:"inline-block", animation:`pulse 0.8s ${i*.15}s infinite` }}/>)}
+                      {[0,1,2].map(i=><span key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#4caf50", display:"inline-block", animation:("pulse 0.8s " + (i*0.15) + "s infinite") }}/>)}
                       <span style={{ marginLeft:4 }}>AI menganalisis data line...</span>
                     </div>
                   )}
@@ -719,7 +732,7 @@ export default function DashboardPage() {
                   ))}
                   {aiTyping && aiMsgs[aiMsgs.length-1]?.role!=="assistant" && (
                     <div style={{ alignSelf:"flex-start", fontSize:12, color:"#6b8f72", display:"flex", alignItems:"center", gap:4 }}>
-                      {[0,1,2].map(i=><span key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#4caf50", display:"inline-block", animation:`pulse 0.8s ${i*.15}s infinite` }}/>)}
+                      {[0,1,2].map(i=><span key={i} style={{ width:5, height:5, borderRadius:"50%", background:"#4caf50", display:"inline-block", animation:("pulse 0.8s " + (i*0.15) + "s infinite") }}/>)}
                       <span style={{ marginLeft:4 }}>AI menganalisis data spreadsheet...</span>
                     </div>
                   )}
@@ -749,7 +762,7 @@ export default function DashboardPage() {
         )}
 
       </div>
-      <style>{`@keyframes pulse{0%,80%,100%{opacity:.3}40%{opacity:1}}`}</style>
+      <style dangerouslySetInnerHTML={{__html:"@keyframes pulse{0%,80%,100%{opacity:.3}40%{opacity:1}}"}}/>
     </div>
   )
 }
