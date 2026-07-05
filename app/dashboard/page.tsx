@@ -84,10 +84,6 @@ export default function DashboardPage() {
   const [refreshing,   setRefreshing]   = useState(false)
   const [todos,        setTodos]        = useState<Todo[]>([])
   const [newTodo,      setNewTodo]      = useState("")
-  // Planning data dari API
-  const [planData,     setPlanData]     = useState<any>(null)
-  const [planFactory,  setPlanFactory]  = useState("A")
-  const [planLoading,  setPlanLoading]  = useState(false)
   const [showAddTodo,  setShowAddTodo]  = useState(false)
   // Chat AI
   const [aiMsgs,       setAiMsgs]       = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
@@ -133,17 +129,6 @@ export default function DashboardPage() {
     fetch("/api/todo").then(r=>r.json()).then(d => setTodos(d.items ?? [])).catch(() => {})
   }, [])
 
-  // Fetch planning data saat tab planning pertama kali dibuka
-  useEffect(() => {
-    if (page !== "plan" || planData) return
-    setPlanLoading(true)
-    fetch("/api/planning")
-      .then(r => r.json())
-      .then(d => { if (d.ok) setPlanData(d.data) })
-      .catch(() => {})
-      .finally(() => setPlanLoading(false))
-  }, [page])
-
   useEffect(() => { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(() => { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
 
@@ -171,8 +156,6 @@ export default function DashboardPage() {
         return
       }
       const { _cache, ...rest } = d; setKpi(rest); setCache(_cache)
-      // Reset planning cache agar ikut refresh berikutnya
-      setPlanData(null)
       // Sync AI todos
       if (d.todo_ai?.length) {
         await fetch("/api/todo", { method:"POST", headers:{"Content-Type":"application/json"},
@@ -456,144 +439,100 @@ export default function DashboardPage() {
         {/* ══ PLANNING ══ */}
         {page==="plan" && (
           <div>
-            {/* Toolbar */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <div style={{ ...S.stitle, margin:0 }}><i className="ti ti-calendar-stats" aria-hidden="true" style={{ fontSize:12 }}/>Planning — Data_Plan_DST</div>
-              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                {planData?.factories?.map((f: string) => (
-                  <button key={f}
-                    onClick={() => setPlanFactory(f)}
-                    style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
-                      background:planFactory===f?"#1a5c2a":"#fff",
-                      color:planFactory===f?"#fff":"#3d5a42", cursor:"pointer" }}>
-                    Factory {f}
-                  </button>
-                ))}
-                {planData && <span style={{ fontSize:9, color:"#6b8f72", marginLeft:4 }}>Update: {planData.cached_at}</span>}
+              <div style={{ ...S.stitle, margin:0 }}><i className="ti ti-calendar-stats" aria-hidden="true" style={{ fontSize:12 }}/>Planning per factory</div>
+              <div style={{ display:"flex", gap:6 }}>
+                <select style={{ fontSize:10, padding:"4px 7px", borderRadius:6, border:"0.5px solid #c8e6c9" }}>
+                  <option>Factory A (K01–K05)</option><option>Factory B (K06–K10)</option><option>Factory C (K11–K15)</option>
+                </select>
+                <button style={{ fontSize:10, padding:"4px 8px", borderRadius:5, border:"0.5px solid #c8e6c9", background:"#fff", cursor:"pointer" }}>◀</button>
+                <button style={{ fontSize:10, padding:"4px 8px", borderRadius:5, border:"0.5px solid #c8e6c9", background:"#fff", cursor:"pointer" }}>▶</button>
               </div>
             </div>
-
-            {/* Loading */}
-            {planLoading && (
-              <div style={{ padding:"32px", textAlign:"center", color:"#6b8f72", fontSize:12 }}>
-                <i className="ti ti-loader" style={{ fontSize:18, display:"block", marginBottom:8 }} aria-hidden="true"/>
-                Memuat data planning dari spreadsheet...
-              </div>
-            )}
-
-            {/* Error / kosong */}
-            {!planLoading && !planData && (
-              <div style={{ padding:"24px", textAlign:"center", background:"#fff3e0", borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:"#e65100" }}>
-                <i className="ti ti-alert-triangle" style={{ fontSize:18, display:"block", marginBottom:8 }} aria-hidden="true"/>
-                Gagal memuat data planning. Pastikan sheet Data_Plan_DST tersedia.
-              </div>
-            )}
-
-            {/* Tabel planning */}
-            {!planLoading && planData && (() => {
-              const rows: any[] = planData.rows[planFactory] ?? []
-              const dates: string[] = planData.dateHeaders ?? []
-              const today = new Date()
-              const currWeekDates = new Set(dates.filter(d => {
-                const parts = d.split("-")
-                const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-                const mIdx = months.findIndex(m => m === parts[1])
-                const date = new Date(today.getFullYear(), mIdx, parseInt(parts[0]))
-                const diff = (date.getTime() - today.getTime()) / 86400000
-                return diff >= 0 && diff < 7
-              }))
-
-              // Kelompokkan baris per line
-              const lines = [...new Set(rows.map((r: any) => r.line))]
-
-              return (
-                <div>
-                  <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9" }}>
-                    <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
-                      <thead>
-                        <tr>
-                          {/* Kolom freeze */}
-                          {[["Line",46,"left",0],["SPO",74,"left",46],["Style",172,"left",120],["Note",112,"left",292],["Priority",88,"center",404]].map(([h,w,a,l],i) => (
-                            <th key={i} style={{
-                              background:i===4?"#1b4d24":"#1a5c2a", color:"#fff",
-                              padding:"6px 8px", fontWeight:500, whiteSpace:"nowrap" as const,
-                              position:"sticky" as const, top:0, left:l as number, zIndex:5+i,
-                              minWidth:w as number, textAlign:a as any,
-                              borderRight:i===4?"2px solid rgba(255,255,255,.3)":"0.5px solid rgba(255,255,255,.15)",
-                              borderBottom:"1px solid rgba(255,255,255,.2)",
-                            }}>{h}</th>
-                          ))}
-                          {/* Kolom tanggal */}
-                          {dates.map(d => {
-                            const isCurr = currWeekDates.has(d)
+            <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9" }}>
+              <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, width:"100%" }}>
+                <thead>
+                  <tr>
+                    {([ ["Line",44,"left",0],["SPO",68,"left",44],["Style",155,"left",112],["Qty Plan",72,"right",267],["Note",120,"left",339],["Priority",85,"center",459] ] as [string,number,string,number][]).map(([h,w,a,l],i) => (
+                      <th key={i} style={{ background:"#1a5c2a", color:"#fff", padding:"7px 9px", fontWeight:500, whiteSpace:"nowrap" as const, position:"sticky", top:0, zIndex:4, textAlign:a as any, minWidth:w, left:l, borderRight:i===5?"2px solid rgba(255,255,255,.3)":"0.5px solid rgba(255,255,255,.15)" }}>{h}</th>
+                    ))}
+                    {[["29-Jun","#1b4d24"],["30-Jun","#1b4d24"],["01-Jul","#1b4d24"],["02-Jul","#1b4d24"],["03-Jul","#245c2a"],["04-Jul","#245c2a"],["05-Jul","#245c2a"],["06-Jul","#245c2a"],["07-Jul","#1a5c2a"],["08-Jul","#1a5c2a"],["09-Jul","#1a5c2a"],["10-Jul","#1a5c2a"],["11-Jul","#1a5c2a"],["12-Jul","#1a5c2a"]].map(([d,bg]) => (
+                      <th key={d} style={{ background:bg, color:"#fff", padding:"7px 9px", fontWeight:500, whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2, minWidth:60, textAlign:"center", borderRight:"0.5px solid rgba(255,255,255,.1)" }}>{d}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { factory:"Factory A", line:"K01", rows:[
+                      { spo:"0911/26", style:"Tour Authentic 2025 Men",     qty:"8,928", note:"—",                   prio:"Normal",    ph:false, dates:{ "29-Jun":900,"30-Jun":576,"01-Jul":957,"02-Jul":411,"03-Jul":756,"04-Jul":540 } },
+                      { spo:"0904/26", style:"Tour Authentic 2025 Women",   qty:"7,776", note:"KA 288",              prio:"KA DULU",   ph:true,  dates:{ "30-Jun":288,"02-Jul":467,"03-Jul":288 } },
+                      { spo:"1012/26", style:"Tour Auth UV Custom 2025",    qty:"3,744", note:"LAD 2880, LADKA 864", prio:"LAD, KA DULU", ph:true, dates:{ "05-Jul":480,"06-Jul":480,"07-Jul":480,"08-Jul":480,"09-Jul":480 } },
+                      { spo:"1147/26", style:"Tour Auth UV Custom 2025",    qty:"2,304", note:"LAD 2304",            prio:"LAD",       ph:true,  dates:{ "08-Jul":384,"09-Jul":384,"10-Jul":384 } },
+                    ]},
+                    { factory:"Factory A", line:"K02", rows:[
+                      { spo:"0911/26", style:"Tour Authentic 2025 Men",     qty:"10,224", note:"—",  prio:"Normal", ph:false, dates:{ "29-Jun":792,"30-Jun":36,"01-Jul":892,"02-Jul":768,"03-Jul":672,"04-Jul":480 } },
+                      { spo:"0904/26", style:"Tour Authentic 2025 Men",     qty:"9,648",  note:"—",  prio:"Normal", ph:false, dates:{ "30-Jun":432,"03-Jul":480,"04-Jul":480 } },
+                      { spo:"1028/26", style:"Tour Authentic 2025 Men",     qty:"3,600",  note:"—",  prio:"Normal", ph:false, dates:{ "05-Jul":480,"06-Jul":480,"07-Jul":480 } },
+                    ]},
+                    { factory:"Factory B", line:"K06", rows:[
+                      { spo:"1244/26", style:"Tour Authentic 2025 Men",     qty:"6,480", note:"size S dulu 2304", prio:"KI DULU", ph:true, dates:{ "01-Jul":480,"02-Jul":480,"03-Jul":480,"04-Jul":480,"05-Jul":480 } },
+                      { spo:"1215/26", style:"Tour Authentic 2025 Men",     qty:"2,016", note:"—", prio:"Normal", ph:false, dates:{ "06-Jul":480,"07-Jul":480,"08-Jul":480 } },
+                    ]},
+                  ].map(({ factory, line, rows }) => {
+                    const dateCols = ["29-Jun","30-Jun","01-Jul","02-Jul","03-Jul","04-Jul","05-Jul","06-Jul","07-Jul","08-Jul","09-Jul","10-Jul","11-Jul","12-Jul"]
+                    const twCols   = new Set(["03-Jul","04-Jul","05-Jul","06-Jul"])
+                    const scBase: React.CSSProperties = { padding:"5px 9px", borderBottom:"0.5px solid #c8e6c9", borderRight:"0.5px solid rgba(200,230,201,.4)", whiteSpace:"nowrap" }
+                    const scSticky = (left: number, extra: React.CSSProperties = {}): React.CSSProperties => ({ ...scBase, position:"sticky", left, background:"#fff", zIndex:1, ...extra })
+                    return [
+                      <tr key={`${line}-sep`} style={{ background:"#e8f5e9" }}>
+                        <td style={{ ...scSticky(0), fontWeight:500, color:"#1a5c2a", fontSize:11 }}>{factory}</td>
+                        <td style={scSticky(44)}>—</td>
+                        <td style={{ ...scSticky(112), fontWeight:500, color:"#1a5c2a" }}>Line {line}</td>
+                        <td style={scSticky(267,{ textAlign:"right" })}></td>
+                        <td style={scSticky(339)}></td>
+                        <td style={{ ...scSticky(459), borderRight:"2px solid #c8e6c9" }}></td>
+                        {dateCols.map(d => <td key={d} style={{ ...scBase, background:"#e8f5e9" }}></td>)}
+                      </tr>,
+                      ...rows.map((r, ri) => (
+                        <tr key={`${line}-${ri}`}>
+                          <td style={scSticky(0)}><strong>{line}</strong></td>
+                          <td style={scSticky(44)}>{r.spo}</td>
+                          <td style={scSticky(112)}>{r.style}</td>
+                          <td style={{ ...scSticky(267), textAlign:"right" }}>{r.qty}</td>
+                          <td style={{ ...scSticky(339), color:r.note==="—"?"#6b8f72":"#e65100", fontStyle:r.note==="—"?"normal":"italic", fontSize:10 }}>{r.note}</td>
+                          <td style={{ ...scSticky(459), borderRight:"2px solid #c8e6c9", textAlign:"center",
+                            color:r.ph?"#c62828":"#6b8f72", fontWeight:r.ph?500:400, fontSize:10,
+                            background:r.ph?"#fff8f8":"#fff" }}>
+                            {r.ph ? (
+                              <span style={{ background:"#ffebee", color:"#c62828", fontSize:9, padding:"2px 7px", borderRadius:8, fontWeight:500 }}>{r.prio}</span>
+                            ) : (
+                              <span style={{ background:"#e8f5e9", color:"#6b8f72", fontSize:9, padding:"2px 7px", borderRadius:8 }}>{r.prio}</span>
+                            )}
+                          </td>
+                          {dateCols.map(d => {
+                            const val = (r.dates as any)[d]
+                            const isTw = twCols.has(d)
                             return (
-                              <th key={d} style={{
-                                background:isCurr?"#2e7d32":"#1a5c2a", color:"#fff",
-                                padding:"6px 8px", fontWeight:500, whiteSpace:"nowrap" as const,
-                                position:"sticky" as const, top:0, zIndex:2,
-                                minWidth:58, textAlign:"center",
-                                borderRight:"0.5px solid rgba(255,255,255,.1)",
-                                borderBottom:"1px solid rgba(255,255,255,.2)",
-                              }}>{d}</th>
+                              <td key={d} style={{ ...scBase, textAlign:"center", background:isTw?"#f1f8f2":"#fff",
+                                color:"#1a5c2a", fontWeight:val?500:400 }}>
+                                {val ? val.toLocaleString("id-ID") : ""}
+                              </td>
                             )
                           })}
                         </tr>
-                      </thead>
-                      <tbody>
-                        {lines.map((line, li) => {
-                          const lineRows = rows.filter((r: any) => r.line === line)
-                          const bg     = li % 2 === 0 ? "#e8f5e9" : "#fff"
-                          const bgCurr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
-                          const sc = (l: number, extra: any = {}): React.CSSProperties => ({
-                            padding:"5px 8px", borderBottom:"0.5px solid #e0ece0",
-                            borderRight:"0.5px solid #c8e6c9", background:bg,
-                            position:"sticky", left:l, zIndex:1, whiteSpace:"nowrap" as const, ...extra
-                          })
-                          return lineRows.map((row: any, ri: number) => (
-                            <tr key={`${line}-${ri}`}>
-                              <td style={sc(0, { textAlign:"left", minWidth:46 })}>
-                                {ri===0 && <strong style={{ color:"#1a5c2a" }}>{row.line}</strong>}
-                              </td>
-                              <td style={sc(46, { textAlign:"left", minWidth:74 })}>{row.spo}</td>
-                              <td style={sc(120, { textAlign:"left", minWidth:172, maxWidth:172, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
-                              <td style={sc(292, { textAlign:"left", minWidth:112, fontStyle:"italic", color:"#6b8f72", fontSize:10 })}>{row.note||"—"}</td>
-                              <td style={{ ...sc(404), borderRight:"2px solid #c8e6c9", textAlign:"center", minWidth:88 }}>
-                                {!row.priority ? <span style={{ color:"#9e9e9e", fontSize:10 }}>—</span>
-                                  : row.priority.toLowerCase()==="ka" ? <span style={{ background:"#ffebee", color:"#c62828", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>Ka</span>
-                                  : row.priority.toLowerCase()==="ki" ? <span style={{ background:"#ffebee", color:"#c62828", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>Ki</span>
-                                  : row.priority.toLowerCase()==="lad" ? <span style={{ background:"#e3f2fd", color:"#1565c0", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>Lad</span>
-                                  : <span style={{ fontSize:10, color:"#3d5a42" }}>{row.priority}</span>}
-                              </td>
-                              {dates.map(d => {
-                                const val = row.dates[d]
-                                const isCurr = currWeekDates.has(d)
-                                const cellBg = isCurr ? bgCurr : bg
-                                return (
-                                  <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.35)", background:cellBg, textAlign:"center", whiteSpace:"nowrap" as const, fontSize:10 }}>
-                                    {val === "F"
-                                      ? <span style={{ color:"#c62828", fontWeight:700 }}>F</span>
-                                      : val ? <span style={{ color:"#1a5c2a", fontWeight:500 }}>{Number(val).toLocaleString("id-ID")}</span>
-                                      : ""}
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          ))
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {/* Legend */}
-                  <div style={{ marginTop:8, fontSize:9, color:"#6b8f72", display:"flex", gap:14, flexWrap:"wrap" as const, alignItems:"center" }}>
-                    <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
-                    <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
-                    <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
-                    <span style={{ color:"#c62828", fontWeight:700 }}>F</span><span>= Akhir planning SPO</span>
-                    <span style={{ marginLeft:"auto", color:"#6b8f72" }}>Line · SPO · Style · Note · Priority dikunci — Scroll → untuk tanggal</span>
-                  </div>
-                </div>
-              )
-            })()}
+                      ))
+                    ]
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop:8, fontSize:9, color:"#6b8f72", display:"flex", gap:14, flexWrap:"wrap" }}>
+              <span><span style={{ display:"inline-block", width:9, height:9, background:"#f1f8f2", border:"0.5px solid #c8e6c9", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
+              <span><span style={{ display:"inline-block", width:9, height:9, background:"#ffebee", border:"0.5px solid #ef9a9a", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Priority tinggi</span>
+              <span style={{ marginLeft:"auto", color:"#6b8f72" }}>Line · SPO · Style · Qty · Note · Priority dikunci — Scroll → untuk tanggal</span>
+            </div>
+          </div>
+        )}
 
         {/* ══ SIMULATION CENTER ══ */}
         {page==="sim" && (
