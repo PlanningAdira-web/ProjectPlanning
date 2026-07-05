@@ -19,6 +19,7 @@ export const CACHE_KEYS = {
   ALERTS    : "dashboard_alerts",
   BALANCING : "balancing_lines",
   TODO      : "todo_items",
+  PLANNING  : "planning_dst",
 }
 
 const CACHE_SHEET = "AI_Cache"
