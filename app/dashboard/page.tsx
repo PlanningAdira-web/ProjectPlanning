@@ -56,7 +56,7 @@ function KPICard({ label, val, sub, color="#1a5c2a", left="#4caf50" }: any) {
   return (
     <div style={{ background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, padding:"9px 11px", borderLeft:`3px solid ${left}` }}>
       <div style={{ fontSize:10, color:"#6b8f72", marginBottom:2 }}>{label}</div>
-      <div style={{ fontSize:18, fontWeight:500, color, lineHeight:1.1 }}>{val ?? "—"}</div>
+      <div style={{ fontSize:18, fontWeight:500, color, lineHeight:1.1 }}>{val ?? "--"}</div>
       {sub && <div style={{ fontSize:9, color:"#6b8f72", marginTop:2 }}>{sub}</div>}
     </div>
   )
@@ -94,7 +94,7 @@ export default function DashboardPage() {
   const [aiInput,      setAiInput]      = useState("")
   const [aiTyping,     setAiTyping]     = useState(false)
   // Chat Balancing
-  const [balMsgs,      setBalMsgs]      = useState<Msg[]>([{ role:"assistant", content:"Halo! Isi form order baru di atas lalu klik \"Analisis\" — atau langsung ceritakan kebutuhan balancing Anda di sini.\n\nData diambil dari cache Data_Plan_DST." }])
+  const [balMsgs,      setBalMsgs]      = useState<Msg[]>([{ role:"assistant", content:"Halo! Isi form order baru di atas lalu klik \"Analisis\" - atau langsung ceritakan kebutuhan balancing Anda di sini.\n\nData diambil dari cache Data_Plan_DST." }])
   const [balInput,     setBalInput]     = useState("")
   const [balTyping,    setBalTyping]    = useState(false)
   const [balHistory,   setBalHistory]   = useState<any[]>([])
@@ -217,7 +217,7 @@ export default function DashboardPage() {
         buf += dec.decode(value, { stream:true })
         setAiMsgs([...next, { role:"assistant", content:buf }])
       }
-    } catch { setAiMsgs([...next, { role:"assistant", content:"❌ Gagal terhubung ke AI." }]) }
+    } catch { setAiMsgs([...next, { role:"assistant", content:"Gagal terhubung ke AI." }]) }
     finally { setAiTyping(false) }
   }
 
@@ -238,9 +238,9 @@ export default function DashboardPage() {
         setBalMsgs([...next, { role:"assistant", content:buf }])
       }
       // Simpan ke history
-      const histLabel = (bStyle || "Balancing") + (bQty ? " · " + parseInt(bQty).toLocaleString() + " pcs" : "")
+      const histLabel = (bStyle || "Balancing") + (bQty ? " - " + parseInt(bQty).toLocaleString() + " pcs" : "")
       setBalHistory(h => [{date: new Date().toLocaleString("id-ID"), label: histLabel, msgs:[...next, { role:"assistant" as const, content:buf }]}, ...h.slice(0,9)])
-    } catch { setBalMsgs([...next, { role:"assistant", content:"❌ Gagal terhubung ke AI." }]) }
+    } catch { setBalMsgs([...next, { role:"assistant", content:"Gagal terhubung ke AI." }]) }
     finally { setBalTyping(false) }
   }
 
@@ -260,7 +260,7 @@ export default function DashboardPage() {
 
   function goChat(msg: string) { setPage("ai"); setTimeout(() => sendAI(msg), 200) }
 
-  const v = (x: any, s = "") => (x != null && x !== "") ? `${x}${s}` : "—"
+  const v = (x: any, s = "") => (x != null && x !== "") ? `${x}${s}` : "--"
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
 
   const navStyle = (p: Page): React.CSSProperties => ({
@@ -278,7 +278,7 @@ export default function DashboardPage() {
     lineHeight:1.65, whiteSpace:"pre-wrap" as const,
   })
 
-  // ── Planning table helper ────────────────────────────────────────
+  // Planning table helper
   function PlanningTable() {
     if (planLoading) return (
       <div style={{ padding:"32px", textAlign:"center", color:"#6b8f72", fontSize:12 }}>
@@ -349,9 +349,9 @@ export default function DashboardPage() {
                     </td>
                     <td style={sc(46, bg, { textAlign:"left", minWidth:74 })}>{row.spo}</td>
                     <td style={sc(120, bg, { textAlign:"left", minWidth:172, maxWidth:172, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
-                    <td style={sc(292, bg, { textAlign:"left", minWidth:112, fontStyle:"italic", color:"#6b8f72" })}>{row.note||"—"}</td>
+                    <td style={sc(292, bg, { textAlign:"left", minWidth:112, fontStyle:"italic", color:"#6b8f72" })}>{row.note||"--"}</td>
                     <td style={{ ...sc(404, bg), borderRight:"2px solid #c8e6c9", textAlign:"center", minWidth:88 }}>
-                      {!row.priority ? <span style={{ color:"#9e9e9e" }}>—</span>
+                      {!row.priority ? <span style={{ color:"#9e9e9e" }}>--</span>
                         : row.priority.toLowerCase()==="ka" || row.priority.toLowerCase()==="ki"
                           ? <span style={{ background:"#ffebee", color:"#c62828", fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>{row.priority}</span>
                           : row.priority.toLowerCase()==="lad"
@@ -383,7 +383,7 @@ export default function DashboardPage() {
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
           <span style={{ color:"#c62828", fontWeight:700 }}>F</span>
           <span>= Akhir planning SPO</span>
-          <span style={{ marginLeft:"auto" }}>Scroll → untuk lihat semua tanggal planning</span>
+          <span style={{ marginLeft:"auto" }}>Scroll -> untuk lihat semua tanggal planning</span>
         </div>
       </div>
     )
@@ -441,12 +441,12 @@ export default function DashboardPage() {
       {/* Content */}
       <div style={S.content}>
 
-        {/* ══ PLANNING ══ */}
+        {/* == PLANNING == */}
         {page==="plan" && (
           <div>
             {/* Toolbar */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <div style={{ ...S.stitle, margin:0 }}><i className="ti ti-calendar-stats" aria-hidden="true" style={{ fontSize:12 }}/>Planning — Data_Plan_DST</div>
+              <div style={{ ...S.stitle, margin:0 }}><i className="ti ti-calendar-stats" aria-hidden="true" style={{ fontSize:12 }}/>Planning - Data_Plan_DST</div>
               <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                 {planData?.factories?.map((f: string) => (
                   <button key={f}
@@ -463,7 +463,7 @@ export default function DashboardPage() {
 
             <PlanningTable />
 
-        {/* ══ PLANNING SIMULATION ══ */}
+        {/* == PLANNING SIMULATION == */}
         {page==="sim" && (
           <div>
             {/* 4 Sim cards */}
@@ -487,7 +487,7 @@ export default function DashboardPage() {
                   {s.hint && <div style={{ fontSize:9, color:"#6b8f72", marginBottom:6 }}>{s.hint}</div>}
                   <button onClick={()=>goChat(s.prompt)}
                     style={{ width:"100%", padding:"7px", borderRadius:7, border:"none", background:s.color, color:"#fff", fontSize:10, fontWeight:500, cursor:"pointer" }}>
-                    Jalankan simulasi ↗
+                    Jalankan simulasi
                   </button>
                 </div>
               ))}
@@ -518,7 +518,7 @@ export default function DashboardPage() {
                     cursor:!perms.canBalancing?"not-allowed":"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
                   <i className="ti ti-brain" style={{ fontSize:13 }} aria-hidden="true"/>
-                  {!perms.canBalancing ? "🔒 Hanya Admin / Tim Planning" : bAnalyzing ? "Menganalisis..." : "Analisis ketersediaan & rekomendasi balancing"}
+                  {!perms.canBalancing ? "Hanya Admin / Tim Planning" : bAnalyzing ? "Menganalisis..." : "Analisis ketersediaan & rekomendasi balancing"}
                 </button>
               </div>
             </div>
@@ -552,7 +552,7 @@ export default function DashboardPage() {
                 <div style={{ height:260, overflowY:"auto", display:"flex", flexDirection:"column", gap:7, padding:9, background:"#f4f9f4", borderRadius:"7px 7px 0 0", border:"0.5px solid #c8e6c9", borderBottom:"none" }}>
                   {balMsgs.map((m,i) => (
                     <div key={i} style={{ ...msgStyle(m.role), fontSize:10 }}>
-                      {m.content}{balTyping&&i===balMsgs.length-1&&m.role==="assistant"?"▍":""}
+                      {m.content}{balTyping&&i===balMsgs.length-1&&m.role==="assistant"?"":""}
                     </div>
                   ))}
                   {balTyping && balMsgs[balMsgs.length-1]?.role!=="assistant" && (
@@ -586,19 +586,19 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ══ DASHBOARD PLANNING ══ */}
+        {/* == DASHBOARD PLANNING == */}
         {page==="vis" && (
           <div>
             <div style={{ padding:"10px 0", borderBottom:"0.5px solid #c8e6c9", display:"flex", alignItems:"center", gap:10, marginBottom:0, flexShrink:0 }}>
               <span style={{ fontSize:13, fontWeight:500, color:"#1a5c2a" }}>Dashboard Planning</span>
               <span style={{ fontSize:10, background:"#e3f2fd", color:"#1565c0", padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Looker Studio</span>
-              <span style={{ fontSize:10, color:"#6b8f72", marginLeft:"auto" }}>Data dari Google Sheets · 0 token</span>
+              <span style={{ fontSize:10, color:"#6b8f72", marginLeft:"auto" }}>Data dari Google Sheets - 0 token</span>
               <a href={LOOKER_FULL} target="_blank" rel="noreferrer"
                 style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#f4f9f4", color:"#3d5a42", textDecoration:"none", fontSize:11 }}>
                 <i className="ti ti-external-link" style={{ fontSize:12 }} aria-hidden="true"/>Buka fullscreen
               </a>
             </div>
-            <iframe src={LOOKER_EMBED} width="100%" height="480" style={{ border:"none", display:"block" }} allowFullScreen title="Dashboard Planning — Looker Studio"/>
+            <iframe src={LOOKER_EMBED} width="100%" height="480" style={{ border:"none", display:"block" }} allowFullScreen title="Dashboard Planning - Looker Studio"/>
 
             {/* Plan To-Do + KPI ringkas */}
             <div style={{ marginTop:14 }}>
@@ -660,10 +660,10 @@ export default function DashboardPage() {
                       <div>
                         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
                           {[
-                            { label:"KPI Score",       val:kpi.kpi_score       ? kpi.kpi_score+"%"      : "—", color:"#00695c" },
-                            { label:"Scorecard",       val:kpi.scorecard_score ? kpi.scorecard_score+"%" : "—", color:"#1a5c2a" },
-                            { label:"Outstanding SPO", val:kpi.outstanding_spo_pcs ? Number(kpi.outstanding_spo_pcs).toLocaleString("id-ID")+" pcs" : "—", color:"#e65100" },
-                            { label:"WIP >1 Minggu",   val:kpi.wip_over_1week_pcs  ? Number(kpi.wip_over_1week_pcs).toLocaleString("id-ID")+" pcs"  : "—", color:"#c62828" },
+                            { label:"KPI Score",       val:kpi.kpi_score       ? kpi.kpi_score+"%"      : "--", color:"#00695c" },
+                            { label:"Scorecard",       val:kpi.scorecard_score ? kpi.scorecard_score+"%" : "--", color:"#1a5c2a" },
+                            { label:"Outstanding SPO", val:kpi.outstanding_spo_pcs ? Number(kpi.outstanding_spo_pcs).toLocaleString("id-ID")+" pcs" : "--", color:"#e65100" },
+                            { label:"WIP >1 Minggu",   val:kpi.wip_over_1week_pcs  ? Number(kpi.wip_over_1week_pcs).toLocaleString("id-ID")+" pcs"  : "--", color:"#c62828" },
                           ].map(k => (
                             <div key={k.label} style={{ background:"#f4f9f4", borderRadius:6, padding:"8px 10px" }}>
                               <div style={{ fontSize:9, color:"#6b8f72", marginBottom:2 }}>{k.label}</div>
@@ -672,7 +672,7 @@ export default function DashboardPage() {
                           ))}
                         </div>
                         <div style={{ fontSize:10, color:"#6b8f72", background:"#f4f9f4", borderRadius:6, padding:"7px 10px" }}>
-                          <div>Update: <strong style={{ color:"#1a5c2a" }}>{cache.cached_at}</strong> · oleh <strong style={{ color:"#1a5c2a" }}>{cache.cached_by}</strong></div>
+                          <div>Update: <strong style={{ color:"#1a5c2a" }}>{cache.cached_at}</strong> - oleh <strong style={{ color:"#1a5c2a" }}>{cache.cached_by}</strong></div>
                           {kpi.planning_risk_level && (
                             <div style={{ marginTop:5, display:"flex", alignItems:"center", gap:5 }}>
                               Risk level:
@@ -696,16 +696,16 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ══ AI PLANNING ASSISTANT ══ */}
+        {/* == AI PLANNING ASSISTANT == */}
         {page==="ai" && (
           <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 100px)" }}>
             <div style={{ fontSize:10, color:"#6b8f72", marginBottom:6 }}>
-              Login sebagai: <strong style={{ color:"#1a5c2a" }}>{user.name}</strong> · {rl.label}
-              {!perms.canChat && <span style={{ marginLeft:8, color:"#c62828" }}>🔒 Chat tidak tersedia untuk role Viewer</span>}
+              Login sebagai: <strong style={{ color:"#1a5c2a" }}>{user.name}</strong> - {rl.label}
+              {!perms.canChat && <span style={{ marginLeft:8, color:"#c62828" }}>Chat tidak tersedia untuk role Viewer</span>}
             </div>
             {!perms.canChat ? (
               <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:10 }}>
-                <div style={{ fontSize:32 }}>🔒</div>
+                <div style={{ fontSize:32 }}>--</div>
                 <div style={{ fontSize:13, fontWeight:500, color:"#555" }}>Chat AI tidak tersedia</div>
                 <div style={{ fontSize:12, color:"#6b8f72", textAlign:"center", lineHeight:1.7 }}>Role <strong>Viewer</strong> hanya bisa melihat dashboard.<br/>Login sebagai Analyst atau Planning untuk akses chat.</div>
               </div>
@@ -714,7 +714,7 @@ export default function DashboardPage() {
                 <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:9, paddingRight:2 }}>
                   {aiMsgs.map((m,i) => (
                     <div key={i} style={msgStyle(m.role)}>
-                      {m.content}{aiTyping&&i===aiMsgs.length-1&&m.role==="assistant"?"▍":""}
+                      {m.content}{aiTyping&&i===aiMsgs.length-1&&m.role==="assistant"?"":""}
                     </div>
                   ))}
                   {aiTyping && aiMsgs[aiMsgs.length-1]?.role!=="assistant" && (
