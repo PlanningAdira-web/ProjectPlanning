@@ -79,7 +79,7 @@ function PlanningTable(props: { planLoading: boolean; planData: any; planFactory
     }, extra || {})
   }
 
-  const headerCols = [
+  const headerCols: { h:string; w:number; a:"left"|"center"|"right"; l:number }[] = [
     { h:"Line",     w:46,  a:"left",   l:0   },
     { h:"SPO",      w:74,  a:"left",   l:46  },
     { h:"Style",    w:172, a:"left",   l:120 },
