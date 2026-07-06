@@ -42,8 +42,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const entry = cacheGet<any[]>(KEY)
+  const entry = await cacheGet<any[]>(KEY)
   if (!entry) return NextResponse.json({ alerts: [], _cache: { has_cache: false } })
-  const info = cacheInfo(KEY)
+  const info = await cacheInfo(KEY)
   return NextResponse.json({ alerts: entry.data, _cache: { ...info } })
 }

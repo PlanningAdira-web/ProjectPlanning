@@ -18,7 +18,7 @@ type TodoItem = {
 }
 
 export async function GET() {
-  const entry = cacheGet<TodoItem[]>(KEY)
+  const entry = await cacheGet<TodoItem[]>(KEY)
   return NextResponse.json({ items: entry?.data ?? [] })
 }
 
@@ -30,26 +30,38 @@ export async function POST(req: NextRequest) {
 
   // Sync todo dari AI refresh
   if (body.action === "sync_ai" && can(user.role, "canRefreshAI")) {
-    const aiItems: TodoItem[] = (body.items ?? []).map((t: any, i: number) => ({
-      id        : `ai_${Date.now()}_${i}`,
-      text      : t.text,
-      priority  : t.priority ?? "normal",
-      source    : "ai",
-      done      : false,
-      done_by   : null,
-      done_at   : null,
-      created_by: "AI",
-      created_at: new Date().toISOString(),
-    }))
-    const existing = ((cacheGet<TodoItem[]>(KEY))?.data ?? [])
-      .filter(t => t.source === "manual" && !t.done)
-    await cacheSet(KEY, [...aiItems, ...existing], user.username)
+    const existing = (await cacheGet<TodoItem[]>(KEY))?.data ?? []
+
+    // Todo yang dipertahankan:
+    // 1. Todo AI lama yang BELUM diceklis (belum selesai)
+    // 2. Todo manual yang BELUM diceklis
+    const retained = existing.filter(t => !t.done)
+
+    // Todo AI baru dari hasil analisis -- skip jika teksnya sudah ada di retained
+    const retainedTexts = new Set(retained.map(t => t.text.trim().toLowerCase()))
+    const newAiItems: TodoItem[] = (body.items ?? [])
+      .filter((t: any) => !retainedTexts.has((t.text ?? "").trim().toLowerCase()))
+      .map((t: any, i: number) => ({
+        id        : "ai_" + Date.now() + "_" + i,
+        text      : t.text,
+        priority  : t.priority ?? "normal",
+        source    : "ai",
+        done      : false,
+        done_by   : null,
+        done_at   : null,
+        created_by: "AI",
+        created_at: new Date().toISOString(),
+      }))
+
+    // Gabung: todo lama yang belum ceklis + todo AI baru
+    // Urutan: todo AI baru di atas, lama di bawah
+    await cacheSet(KEY, [...newAiItems, ...retained], user.username)
     return NextResponse.json({ ok: true })
   }
 
   // Tambah manual todo
   if (body.action === "add" && can(user.role, "canTodo")) {
-    const existing = (cacheGet<TodoItem[]>(KEY))?.data ?? []
+    const existing = (await cacheGet<TodoItem[]>(KEY))?.data ?? []
     const newItem: TodoItem = {
       id        : `manual_${Date.now()}`,
       text      : body.text,
@@ -67,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   // Toggle done
   if (body.action === "toggle" && can(user.role, "canTodo")) {
-    const existing = (cacheGet<TodoItem[]>(KEY))?.data ?? []
+    const existing = (await cacheGet<TodoItem[]>(KEY))?.data ?? []
     const updated  = existing.map(t =>
       t.id === body.id
         ? {

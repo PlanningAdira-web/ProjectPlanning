@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
 
       // 5. Simpan cache
       const entry = await cacheSet(KEY, kpi, user.username)
-      const info  = cacheInfo(KEY)
+      const info  = await cacheInfo(KEY)
 
       return NextResponse.json({ ...kpi, _cache: { fresh: true, ...info } })
 
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Baca cache
-  const entry = cacheGet<any>(KEY)
+  const entry = await cacheGet<any>(KEY)
   if (!entry) {
     return NextResponse.json({
       _cache: {
@@ -139,6 +139,6 @@ export async function GET(req: NextRequest) {
       },
     })
   }
-  const info = cacheInfo(KEY)
+  const info = await cacheInfo(KEY)
   return NextResponse.json({ ...(entry.data as object), _cache: { ...info } })
 }
