@@ -1,27 +1,68 @@
 /**
- * Adapter: convert output getAllSheetsData() (Record<string,string>)
- * menjadi format yang diterima askClaude/askClaudeStream ({dst,prepo,shipment})
+ * Adapter: convert Record<string,string> dari getAllSheetsData()
+ * ke format {dst, prepo, shipment} yang diterima claude.ts
  *
- * Nama sheet disesuaikan dengan spreadsheet PT Adira Semesta Industry.
- * Jika nama sheet berubah, update mapping di bawah.
+ * Mapping berdasarkan struktur aktual "Project AI Planning":
+ * - dst      : Data_Plan_DST, Data_Plan_SEW, Analyst_WIP_Weekly, Analyst_WIPSET_(total)
+ * - prepo    : WIP_MaterialSET_(total), Pre-Prod
+ * - shipment : Analyst_DataExport, Alerts
  */
-export function toClaudeCSV(data: Record<string, string>): { dst?: string; prepo?: string; shipment?: string } {
-  // Cari sheet yang cocok secara flexible (case-insensitive, partial match)
-  const find = (keywords: string[]): string | undefined => {
-    const key = Object.keys(data).find(k =>
-      keywords.some(kw => k.toLowerCase().includes(kw.toLowerCase()))
-    )
-    return key ? data[key] : undefined
+
+export function toClaudeCSV(
+  data: Record<string, string>
+): { dst?: string; prepo?: string; shipment?: string } {
+
+  const dst_sheets: string[]      = []
+  const prepo_sheets: string[]    = []
+  const shipment_sheets: string[] = []
+
+  const SKIP = new Set(["AI_Cache", "Info_Factory", "Pre-Prod 2", "KPI&Scorecard"])
+
+  for (const [name, csv] of Object.entries(data)) {
+    if (!csv || !csv.trim()) continue
+    if (SKIP.has(name)) continue
+
+    const n = name.toLowerCase()
+
+    // DST / Planning / WIP produksi
+    if (
+      n.includes("data_plan") ||
+      n.includes("plan_dst") ||
+      n.includes("plan_sew") ||
+      n.includes("wip_weekly") ||
+      n.includes("wipset") ||
+      n.includes("analyst_wip")
+    ) {
+      dst_sheets.push("-- Sheet: " + name + " --\n" + csv)
+      continue
+    }
+
+    // Material / Pre-Prod
+    if (
+      n.includes("material") ||
+      n.includes("pre-prod") ||
+      n.includes("preprod") ||
+      n.includes("pre_prod")
+    ) {
+      prepo_sheets.push("-- Sheet: " + name + " --\n" + csv)
+      continue
+    }
+
+    // Export / Shipment / Alerts
+    if (
+      n.includes("export") ||
+      n.includes("shipment") ||
+      n.includes("alerts") ||
+      n.includes("stock")
+    ) {
+      shipment_sheets.push("-- Sheet: " + name + " --\n" + csv)
+      continue
+    }
   }
 
-  // Gabungkan semua data sebagai dst jika tidak ada mapping spesifik
-  const allData = Object.entries(data)
-    .map(([name, csv]) => `=== SHEET: ${name} ===\n${csv}`)
-    .join("\n\n")
-
   return {
-    dst     : find(["DST", "Planning", "PlanningProduction", "Data_Plan"]) ?? allData,
-    prepo   : find(["PreProd", "Pre-Prod", "PreProduction", "Material"]),
-    shipment: find(["Ship", "SPO", "Stock", "Export"]),
+    dst     : dst_sheets.length      > 0 ? dst_sheets.join("\n\n")      : undefined,
+    prepo   : prepo_sheets.length    > 0 ? prepo_sheets.join("\n\n")    : undefined,
+    shipment: shipment_sheets.length > 0 ? shipment_sheets.join("\n\n") : undefined,
   }
 }
