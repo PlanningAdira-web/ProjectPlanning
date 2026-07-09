@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [newTodo,    setNewTodo]    = useState("")
   const [showAddTodo,setShowAddTodo]= useState(false)
   const [todoPageData,  setTodoPageData]  = useState<any>(null)
+  const [jobdescs,       setJobdescs]       = useState<any[]>([])
   const [todoPageLoading,setTodoPageLoading] = useState(false)
   const [aiMsgs,     setAiMsgs]    = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
   const [aiInput,    setAiInput]   = useState("")
@@ -101,6 +102,39 @@ export default function DashboardPage() {
       .finally(function() { setTodoPageLoading(false) })
   }, [page, todoPageData])
 
+  useEffect(function() {
+    fetchJobdescs()
+  }, [])
+
+  function fetchJobdescs() {
+    fetch("/api/jobdesc")
+      .then(function(r) { return r.json() })
+      .then(function(d) {
+        if (!d.ok) return
+        const items = d.items ?? []
+        setJobdescs(items)
+        // Init: simpan text ke cache agar carry-over bisa rebuild
+        if (items.length > 0) {
+          fetch("/api/jobdesc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action:"init", items }),
+          }).catch(function() {})
+        }
+      })
+      .catch(function() {})
+  }
+
+  async function handleToggleJobdesc(id: string, text: string) {
+    if (user.role === "viewer") return
+    await fetch("/api/jobdesc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action:"toggle", id, text }),
+    })
+    fetchJobdescs()
+  }
+
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
 
@@ -121,6 +155,7 @@ export default function DashboardPage() {
       const rest = Object.assign({}, d)
       delete rest._cache
       setKpi(rest); setCache(_cache)
+      setTodoPageData(null)
       if (d.todo_ai && d.todo_ai.length > 0) {
         await fetch("/api/todo", { method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ action:"sync_ai", items:d.todo_ai }) })
@@ -250,30 +285,91 @@ export default function DashboardPage() {
     }
   }
 
+  function CheckRow(props: { done: boolean; text: string; badge: string; badgeColor: string; badgeBg: string; canClick: boolean; onClick: () => void; carryDate?: string }) {
+    return (
+      <div onClick={props.canClick ? props.onClick : undefined}
+        style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"6px 9px", borderRadius:7, marginBottom:4, border:"0.5px solid #c8e6c9", background:props.done?"#f1f8f2":"#fff", cursor:props.canClick?"pointer":"default", opacity:props.done?0.6:1 }}>
+        <div style={{ width:16, height:16, borderRadius:4, border:"1.5px solid " + C.gmid, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, background:props.done?C.gmid:"transparent" }}>
+          {props.done && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:11, color:C.txt, lineHeight:1.5, textDecoration:props.done?"line-through":"none" }}>{props.text}</div>
+          {props.carryDate && !props.done && <div style={{ fontSize:9, color:C.org, marginTop:1 }}>Belum selesai sejak {props.carryDate}</div>}
+        </div>
+        <span style={{ fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500, flexShrink:0, background:props.badgeBg, color:props.badgeColor }}>{props.badge}</span>
+      </div>
+    )
+  }
+
   const TodoList = function() {
+    const canClick = perms.canTodo
+
+    // Section jobdesc per tipe
+    const jobdescByType: Record<string, any[]> = { monthly:[], weekly:[], daily:[] }
+    jobdescs.forEach(function(j) {
+      if (jobdescByType[j.type]) jobdescByType[j.type].push(j)
+    })
+
+    const sectionMeta = [
+      { key:"monthly", label:"Monthly",  badge:"Monthly",  bg:"#e3f2fd", col:"#1565c0" },
+      { key:"weekly",  label:"Weekly",   badge:"Weekly",   bg:"#e8f5e9", col:C.gdark  },
+      { key:"daily",   label:"Daily",    badge:"Daily",    bg:"#fff3e0", col:C.org    },
+    ]
+
     return (
       <div>
-        {todos.length === 0 && (
+        {sectionMeta.map(function(sec) {
+          const items = jobdescByType[sec.key] ?? []
+          if (items.length === 0) return null
+          return (
+            <div key={sec.key}>
+              <div style={{ fontSize:9, fontWeight:500, letterSpacing:".07em", textTransform:"uppercase", color:C.tx3, padding:"6px 0 3px", borderBottom:"0.5px solid #c8e6c9", marginBottom:4 }}>
+                {sec.label}
+              </div>
+              {items.map(function(j) {
+                const today = new Date().toISOString().slice(0,10)
+                const isCarry = j.created_date && j.created_date !== today
+                return (
+                  <CheckRow key={j.id}
+                    done={j.done} text={j.text}
+                    badge={sec.badge} badgeColor={sec.col} badgeBg={sec.bg}
+                    canClick={canClick}
+                    onClick={function() { handleToggleJobdesc(j.id, j.text) }}
+                    carryDate={isCarry ? j.created_date : undefined}
+                  />
+                )
+              })}
+            </div>
+          )
+        })}
+
+        {/* AI + Manual todos */}
+        {todos.length > 0 && (
+          <div>
+            <div style={{ fontSize:9, fontWeight:500, letterSpacing:".07em", textTransform:"uppercase", color:C.tx3, padding:"6px 0 3px", borderBottom:"0.5px solid #c8e6c9", marginBottom:4, marginTop:4 }}>
+              AI & Manual
+            </div>
+            {todos.map(function(t) {
+              return (
+                <CheckRow key={t.id}
+                  done={t.done} text={t.text}
+                  badge={t.source==="ai"?"AI":t.priority==="urgent"?"Urgent":"Manual"}
+                  badgeColor={t.source==="ai"?C.teal:t.priority==="urgent"?C.red:C.tx3}
+                  badgeBg={t.source==="ai"?C.tlp:t.priority==="urgent"?C.rdp:C.gpale}
+                  canClick={canClick}
+                  onClick={function() { handleToggleTodo(t.id) }}
+                />
+              )
+            })}
+          </div>
+        )}
+
+        {todos.length === 0 && jobdescs.length === 0 && (
           <div style={{ fontSize:11, color:C.tx3, textAlign:"center", padding:"12px 0" }}>
             {perms.canRefreshAI ? "Klik Refresh Analisis AI untuk generate to-do." : "Menunggu Admin generate to-do pagi ini."}
           </div>
         )}
-        {todos.map(function(t) {
-          return (
-            <div key={t.id} onClick={function() { handleToggleTodo(t.id) }}
-              style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"7px 9px", borderRadius:7, marginBottom:5, border:"0.5px solid #c8e6c9", background:t.done?"#f1f8f2":"#fff", cursor:perms.canTodo?"pointer":"default", opacity:t.done?0.65:1 }}>
-              <div style={{ width:17, height:17, borderRadius:4, border:"1.5px solid " + C.gmid, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1, background:t.done?C.gmid:"transparent" }}>
-                {t.done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-              </div>
-              <div style={{ flex:1, fontSize:11, color:C.txt, lineHeight:1.5, textDecoration:t.done?"line-through":"none", opacity:t.done?0.6:1 }}>{t.text}</div>
-              <span style={{ fontSize:9, padding:"1px 6px", borderRadius:8, fontWeight:500, flexShrink:0,
-                background:t.source==="ai"?C.tlp:t.priority==="urgent"?C.rdp:C.gpale,
-                color:t.source==="ai"?C.teal:t.priority==="urgent"?C.red:C.tx3 }}>
-                {t.source==="ai" ? "AI" : t.priority==="urgent" ? "Urgent" : "Manual"}
-              </span>
-            </div>
-          )
-        })}
+
         {perms.canTodo && (
           showAddTodo
             ? (
