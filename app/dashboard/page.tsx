@@ -303,32 +303,39 @@ export default function DashboardPage() {
 
   const TodoList = function() {
     const canClick = perms.canTodo
+    const todayYMD = new Date().toISOString().slice(0, 10)
 
-    // Section jobdesc per tipe
-    const jobdescByType: Record<string, any[]> = { monthly:[], weekly:[], daily:[] }
-    jobdescs.forEach(function(j) {
-      if (jobdescByType[j.type]) jobdescByType[j.type].push(j)
-    })
+    const byType: Record<string, any[]> = { monthly:[], weekly:[], daily:[] }
+    jobdescs.forEach(function(j) { if (byType[j.type]) byType[j.type].push(j) })
 
-    const sectionMeta = [
-      { key:"monthly", label:"Monthly",  badge:"Monthly",  bg:"#e3f2fd", col:"#1565c0" },
-      { key:"weekly",  label:"Weekly",   badge:"Weekly",   bg:"#e8f5e9", col:C.gdark  },
-      { key:"daily",   label:"Daily",    badge:"Daily",    bg:"#fff3e0", col:C.org    },
+    // Header selalu tampil, tapi Monthly & Weekly skip jika kosong
+    const sections = [
+      { key:"monthly", label:"Monthly",       badge:"Monthly", bg:"#e3f2fd", col:"#1565c0", alwaysShow:true, emptyMsg:"Monthly Tasks Completed" },
+      { key:"weekly",  label:"Weekly",        badge:"Weekly",  bg:"#e8f5e9", col:C.gdark,  alwaysShow:true, emptyMsg:"Weekly Tasks Completed"  },
+      { key:"daily",   label:"Daily",         badge:"Daily",   bg:"#fff3e0", col:C.org,    alwaysShow:true, emptyMsg:"Daily Tasks Completed"   },
+      { key:"focus",   label:"Focus & Action",badge:"AI",      bg:C.tlp,     col:C.teal,   alwaysShow:true, emptyMsg:""                        },
     ]
 
     return (
       <div>
-        {sectionMeta.map(function(sec) {
-          const items = jobdescByType[sec.key] ?? []
-          if (items.length === 0) return null
+        {sections.map(function(sec, si) {
+          const isFocus = sec.key === "focus"
+          const items   = isFocus ? todos : (byType[sec.key] ?? [])
+          const isEmpty = items.length === 0
+
+          if (!sec.alwaysShow && isEmpty) return null
+
           return (
-            <div key={sec.key}>
-              <div style={{ fontSize:9, fontWeight:500, letterSpacing:".07em", textTransform:"uppercase", color:C.tx3, padding:"6px 0 3px", borderBottom:"0.5px solid #c8e6c9", marginBottom:4 }}>
-                {sec.label}
+            <div key={sec.key} style={{ marginTop: si > 0 ? 6 : 0 }}>
+              {/* Header section */}
+              <div style={{ fontSize:9, fontWeight:500, letterSpacing:".07em", textTransform:"uppercase", color:C.tx3, padding:"5px 0 3px", borderBottom:"0.5px solid #c8e6c9", marginBottom:4, display:"flex", justifyContent:"space-between" }}>
+                <span>{sec.label}</span>
+                {isEmpty && (sec as any).emptyMsg && <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0, color:C.gdark }}>{(sec as any).emptyMsg}</span>}
               </div>
-              {items.map(function(j) {
-                const today = new Date().toISOString().slice(0,10)
-                const isCarry = j.created_date && j.created_date !== today
+
+              {/* Items */}
+              {!isFocus && items.map(function(j: any) {
+                const isCarry = j.created_date && j.created_date !== todayYMD
                 return (
                   <CheckRow key={j.id}
                     done={j.done} text={j.text}
@@ -339,55 +346,49 @@ export default function DashboardPage() {
                   />
                 )
               })}
+
+              {isFocus && (
+                <div>
+                  {isEmpty && (
+                    <div style={{ fontSize:11, color:C.tx3, padding:"6px 0", fontStyle:"italic" }}>
+                      {perms.canRefreshAI ? "Klik Refresh Analisis AI untuk generate." : "Menunggu Admin refresh pagi ini."}
+                    </div>
+                  )}
+                  {todos.map(function(t: any) {
+                    return (
+                      <CheckRow key={t.id}
+                        done={t.done} text={t.text}
+                        badge={t.source==="ai"?"AI":t.priority==="urgent"?"Urgent":"Manual"}
+                        badgeColor={t.source==="ai"?C.teal:t.priority==="urgent"?C.red:C.tx3}
+                        badgeBg={t.source==="ai"?C.tlp:t.priority==="urgent"?C.rdp:C.gpale}
+                        canClick={canClick}
+                        onClick={function() { handleToggleTodo(t.id) }}
+                      />
+                    )
+                  })}
+                  {perms.canTodo && (
+                    showAddTodo
+                      ? (
+                        <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                          <input value={newTodo} onChange={function(e) { setNewTodo(e.target.value) }}
+                            onKeyDown={function(e) { if (e.key==="Enter") handleAddTodo() }}
+                            placeholder="Ketik to-do baru..." autoFocus
+                            style={{ flex:1, padding:"6px 9px", borderRadius:7, border:"0.5px solid #c8e6c9", fontSize:11, outline:"none", fontFamily:"system-ui" }}/>
+                          <button onClick={handleAddTodo} style={{ padding:"6px 12px", borderRadius:7, border:"none", background:C.gmid, color:"#fff", fontSize:10, cursor:"pointer" }}>Tambah</button>
+                          <button onClick={function() { setShowAddTodo(false) }} style={{ padding:"6px 10px", borderRadius:7, border:"0.5px solid #c8e6c9", background:"#fff", fontSize:10, cursor:"pointer", color:C.tx3 }}>Batal</button>
+                        </div>
+                      )
+                      : (
+                        <div onClick={function() { setShowAddTodo(true) }} style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 9px", borderRadius:7, border:"0.5px dashed #c8e6c9", color:C.tx3, fontSize:11, cursor:"pointer", marginTop:6 }}>
+                          + Tambah to-do manual
+                        </div>
+                      )
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
-
-        {/* AI + Manual todos */}
-        {todos.length > 0 && (
-          <div>
-            <div style={{ fontSize:9, fontWeight:500, letterSpacing:".07em", textTransform:"uppercase", color:C.tx3, padding:"6px 0 3px", borderBottom:"0.5px solid #c8e6c9", marginBottom:4, marginTop:4 }}>
-              AI & Manual
-            </div>
-            {todos.map(function(t) {
-              return (
-                <CheckRow key={t.id}
-                  done={t.done} text={t.text}
-                  badge={t.source==="ai"?"AI":t.priority==="urgent"?"Urgent":"Manual"}
-                  badgeColor={t.source==="ai"?C.teal:t.priority==="urgent"?C.red:C.tx3}
-                  badgeBg={t.source==="ai"?C.tlp:t.priority==="urgent"?C.rdp:C.gpale}
-                  canClick={canClick}
-                  onClick={function() { handleToggleTodo(t.id) }}
-                />
-              )
-            })}
-          </div>
-        )}
-
-        {todos.length === 0 && jobdescs.length === 0 && (
-          <div style={{ fontSize:11, color:C.tx3, textAlign:"center", padding:"12px 0" }}>
-            {perms.canRefreshAI ? "Klik Refresh Analisis AI untuk generate to-do." : "Menunggu Admin generate to-do pagi ini."}
-          </div>
-        )}
-
-        {perms.canTodo && (
-          showAddTodo
-            ? (
-              <div style={{ display:"flex", gap:6, marginTop:6 }}>
-                <input value={newTodo} onChange={function(e) { setNewTodo(e.target.value) }}
-                  onKeyDown={function(e) { if (e.key==="Enter") handleAddTodo() }}
-                  placeholder="Ketik to-do baru..." autoFocus
-                  style={{ flex:1, padding:"6px 9px", borderRadius:7, border:"0.5px solid #c8e6c9", fontSize:11, outline:"none", fontFamily:"system-ui" }}/>
-                <button onClick={handleAddTodo} style={{ padding:"6px 12px", borderRadius:7, border:"none", background:C.gmid, color:"#fff", fontSize:10, cursor:"pointer" }}>Tambah</button>
-                <button onClick={function() { setShowAddTodo(false) }} style={{ padding:"6px 10px", borderRadius:7, border:"0.5px solid #c8e6c9", background:"#fff", fontSize:10, cursor:"pointer", color:C.tx3 }}>Batal</button>
-              </div>
-            )
-            : (
-              <div onClick={function() { setShowAddTodo(true) }} style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 9px", borderRadius:7, border:"0.5px dashed #c8e6c9", color:C.tx3, fontSize:11, cursor:"pointer", marginTop:6 }}>
-                + Tambah to-do manual
-              </div>
-            )
-        )}
       </div>
     )
   }
