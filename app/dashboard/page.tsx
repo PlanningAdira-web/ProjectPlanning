@@ -126,7 +126,7 @@ export default function DashboardPage() {
   }
 
   async function handleToggleJobdesc(id: string, text: string) {
-    if (user.role === "viewer") return
+    if (!user || user.role === "viewer") return
     await fetch("/api/jobdesc", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
