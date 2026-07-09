@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
   useEffect(function() {
     fetchJobdescs()
-  }, [])
+  }, [page])
 
   function fetchJobdescs() {
     fetch("/api/jobdesc")
@@ -154,7 +154,13 @@ export default function DashboardPage() {
       const _cache = d._cache
       const rest = Object.assign({}, d)
       delete rest._cache
-      setKpi(rest); setCache(_cache)
+      setKpi(rest)
+      // Override cached_at dengan waktu lokal agar akurat
+      setCache(Object.assign({}, _cache, {
+        has_cache : true,
+        cached_at : new Date().toLocaleString("id-ID"),
+        age_label : "baru saja",
+      }))
       setTodoPageData(null)
       if (d.todo_ai && d.todo_ai.length > 0) {
         await fetch("/api/todo", { method:"POST", headers:{"Content-Type":"application/json"},
@@ -410,7 +416,7 @@ export default function DashboardPage() {
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
           <span style={{ background:C.glight, color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Live</span>
           <span style={{ color:"#a5d6a7", fontSize:10 }}>{clock}</span>
-          {cache?.has_cache && <span style={{ fontSize:10, color:"#a5d6a7" }}>Update: {cache.age_label} oleh {cache.cached_by}</span>}
+          {cache?.has_cache && <span style={{ fontSize:10, color:"#a5d6a7" }}>Update: {cache.cached_at} oleh {cache.cached_by}</span>}
           {perms.canRefreshAI && (
             <button onClick={handleRefresh} disabled={refreshing}
               style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", borderRadius:6, border:"none", color:"#fff", fontSize:11, fontWeight:500, cursor:refreshing?"not-allowed":"pointer", background:refreshing?"#388e3c":C.glight }}>
