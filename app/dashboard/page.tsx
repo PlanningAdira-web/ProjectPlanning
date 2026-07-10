@@ -103,16 +103,18 @@ export default function DashboardPage() {
 
   useEffect(function() {
     if (page !== "todo") return
+    fetchJobdescs()
     if (todoPageData) return
     fetchTodoPage(false)
   }, [page, todoPageData])
 
   useEffect(function() {
     fetchJobdescs()
-  }, [page])
+  }, [])
 
   function fetchJobdescs() {
-    fetch("/api/jobdesc")
+    const tz = new Date().getTimezoneOffset()
+    fetch("/api/jobdesc?tz=" + tz)
       .then(function(r) { return r.json() })
       .then(function(d) {
         if (!d.ok) return

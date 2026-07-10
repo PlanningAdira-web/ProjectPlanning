@@ -132,11 +132,20 @@ function generateJobdescs(today: Date): JobdescItem[] {
   return items
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error:"Login diperlukan" }, { status:401 })
 
-  const today    = new Date()
+  // Offset timezone dari client dalam menit (WIB = -420 karena getTimezoneOffset() = -420)
+  // Frontend kirim offsetMinutes = new Date().getTimezoneOffset() = -420 untuk WIB
+  const offsetParam = req.nextUrl.searchParams.get("tz")
+  const tzOffset    = offsetParam ? parseInt(offsetParam) : -420  // default WIB
+
+  // Hitung "sekarang" versi lokal client
+  const now   = new Date()
+  const local = new Date(now.getTime() - tzOffset * 60 * 1000)
+  const today = local
+
   const todayYMD = toYMD(today)
   const cached   = await cacheGet<JobdescStatus>(CACHE_KEY)
   const status   = (cached?.data ?? {}) as JobdescStatus
@@ -205,7 +214,9 @@ export async function POST(req: NextRequest) {
 
   // Toggle done/undone
   if (body.action === "toggle" && body.id) {
-    const todayYMD = toYMD(new Date())
+    const tzOffset = -420  // WIB UTC+7
+  const local    = new Date(new Date().getTime() - tzOffset * 60 * 1000)
+  const todayYMD = toYMD(local)
     const cur      = status[body.id]
     const isDone   = cur?.done ?? false
     status[body.id] = {
@@ -221,7 +232,9 @@ export async function POST(req: NextRequest) {
 
   // Init: simpan text ke status agar bisa carry-over
   if (body.action === "init" && Array.isArray(body.items)) {
-    const todayYMD = toYMD(new Date())
+    const tzOffset = -420  // WIB UTC+7
+  const local    = new Date(new Date().getTime() - tzOffset * 60 * 1000)
+  const todayYMD = toYMD(local)
     let changed = false
     for (const item of body.items) {
       if (!status[item.id]) {
