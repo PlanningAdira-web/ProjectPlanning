@@ -91,14 +91,22 @@ export default function DashboardPage() {
 
 
 
-  function fetchTodoPage(forceRefresh: boolean) {
+  async function fetchTodoPage(forceRefresh: boolean) {
     setTodoPageLoading(true)
-    const url = forceRefresh ? "/api/todo-page?refresh=1" : "/api/todo-page"
-    fetch(url)
-      .then(function(r) { return r.json() })
-      .then(function(d) { if (d.ok) setTodoPageData(d.data) })
-      .catch(function() {})
-      .finally(function() { setTodoPageLoading(false) })
+    try {
+      const url = forceRefresh ? "/api/todo-page?refresh=1" : "/api/todo-page"
+      const r   = await fetch(url)
+      const d   = await r.json()
+      if (d.ok) {
+        setTodoPageData(d.data)
+      } else {
+        console.error("[todo-page] error:", d.error)
+      }
+    } catch(e) {
+      console.error("[todo-page] fetch failed:", e)
+    } finally {
+      setTodoPageLoading(false)
+    }
   }
 
   useEffect(function() {
@@ -169,7 +177,7 @@ export default function DashboardPage() {
         age_label : "baru saja",
       }))
       setTodoPageData(null)
-      fetchTodoPage(true)
+      await fetchTodoPage(true)
       if (d.todo_ai && d.todo_ai.length > 0) {
         await fetch("/api/todo", { method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ action:"sync_ai", items:d.todo_ai }) })
