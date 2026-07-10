@@ -6,9 +6,9 @@ import { google } from "googleapis"
 export const runtime = "nodejs"
 export const maxDuration = 60
 
-export type KPIData    = { kpi_score:string; scorecard:string; fetched_at:string }
-export type AlertRow   = { spo:string; style:string; start_dst:string; concern:string }
-export type TodoPageData = { kpi:KPIData; alerts:AlertRow[]; fetched_at:string }
+export type KPIData      = { kpi_score:string; scorecard:string; fetched_at:string; fetched_epoch:number }
+export type AlertRow     = { spo:string; style:string; start_dst:string; concern:string }
+export type TodoPageData = { kpi:KPIData; alerts:AlertRow[]; fetched_at:string; fetched_epoch:number }
 
 const CACHE_KEY = "todo_page_data"
 
