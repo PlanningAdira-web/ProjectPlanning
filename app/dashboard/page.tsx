@@ -307,6 +307,22 @@ export default function DashboardPage() {
     }
   }
 
+  function ageLabel(isoOrLocale: string): string {
+    if (!isoOrLocale) return ""
+    try {
+      // Coba parse sebagai timestamp number (dari cached_at)
+      const ts = typeof isoOrLocale === "number" ? isoOrLocale : Date.parse(isoOrLocale)
+      if (isNaN(ts)) return isoOrLocale
+      const mins = Math.round((Date.now() - ts) / 60000)
+      if (mins < 1)   return "baru saja"
+      if (mins < 60)  return mins + " menit lalu"
+      const h = Math.floor(mins / 60)
+      const m = mins % 60
+      if (h < 24) return h + " jam" + (m > 0 ? " " + m + " menit" : "") + " lalu"
+      return Math.floor(h / 24) + " hari lalu"
+    } catch { return isoOrLocale }
+  }
+
   function CheckRow(props: { done: boolean; text: string; badge: string; badgeColor: string; badgeBg: string; canClick: boolean; onClick: () => void; carryDate?: string }) {
     return (
       <div onClick={props.canClick ? props.onClick : undefined}
@@ -434,7 +450,7 @@ export default function DashboardPage() {
           <span style={{ color:"#a5d6a7", fontSize:10 }}>{clock}</span>
           {cache?.has_cache && (
             <span style={{ fontSize:10, color:"#a5d6a7" }}>
-              Last Updated: {cache.age_label ?? cache.cached_at} (by {cache.cached_by})
+              Last Updated: {cache.age_label ?? "baru saja"} (by {cache.cached_by})
             </span>
           )}
           {perms.canRefreshAI && (
@@ -544,8 +560,17 @@ export default function DashboardPage() {
                   </div>
                   {todoPageData && (
                     <div style={{ padding:"6px 10px", fontSize:9, color:C.tx3, borderTop:"0.5px solid #ffe0cc", display:"flex", justifyContent:"space-between" }}>
-                      <span>Dari sheet: Alerts (status bukan Done/Selesai/Complete)</span>
-                      <span>{todoPageData.fetched_at}</span>
+                      <span>Dari sheet: Alerts</span>
+                      <span>
+                        {todoPageData.fetched_epoch
+                          ? ageLabel(todoPageData.fetched_epoch)
+                          : todoPageData.fetched_at}
+                      </span>
+                    </div>
+                  )}
+                  {!todoPageData && (
+                    <div style={{ padding:"6px 10px", fontSize:9, color:C.tx3, borderTop:"0.5px solid #ffe0cc" }}>
+                      Memuat data...
                     </div>
                   )}
                 </div>
@@ -578,7 +603,7 @@ export default function DashboardPage() {
                       </div>
                       {todoPageData?.kpi?.fetched_at && (
                         <div style={{ fontSize:9, color:C.tx3, textAlign:"center" }}>
-                          Data diambil: {todoPageData.kpi.fetched_at}
+                          {"Data diambil: " + (todoPageData.kpi.fetched_epoch ? ageLabel(todoPageData.kpi.fetched_epoch) : todoPageData.kpi.fetched_at)}
                         </div>
                       )}
                     </div>
@@ -603,8 +628,9 @@ export default function DashboardPage() {
                               )
                             })}
                           </div>
-                          <div style={{ fontSize:9, color:C.tx3, background:C.bg, borderRadius:6, padding:"6px 8px" }}>
-                            Update AI: <strong style={{ color:C.gdark }}>{cache.cached_at}</strong> oleh <strong style={{ color:C.gdark }}>{cache.cached_by}</strong>
+                          <div style={{ fontSize:9, color:C.tx3, background:C.bg, borderRadius:6, padding:"6px 8px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                            <span>Update AI: <strong style={{ color:C.gdark }}>{cache.age_label ?? "baru saja"}</strong></span>
+                            <span>oleh <strong style={{ color:C.gdark }}>{cache.cached_by}</strong></span>
                           </div>
                         </div>
                       ) : (

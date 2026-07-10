@@ -84,10 +84,13 @@ async function fetchTodoPageData(): Promise<TodoPageData> {
     alerts.push({ spo, style, start_dst:dst, concern })
   }
 
+  const now    = Date.now()
+  const wibStr = new Date(now + 7 * 60 * 60 * 1000).toLocaleString("id-ID", { timeZone:"UTC" })
   return {
-    kpi: { kpi_score:kpiScore, scorecard, fetched_at:new Date().toLocaleString("id-ID") },
+    kpi          : { kpi_score:kpiScore, scorecard, fetched_at:wibStr, fetched_epoch:now },
     alerts,
-    fetched_at: new Date().toLocaleString("id-ID"),
+    fetched_at   : wibStr,
+    fetched_epoch: now,
   }
 }
 
