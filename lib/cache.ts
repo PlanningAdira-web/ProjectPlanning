@@ -1,10 +1,8 @@
 /**
  * Cache dua lapis: in-memory (cepat) + Google Sheets AI_Cache (persisten).
  * 
- * Behaviour:
- * - GET: tunggu load dari sheet selesai (sekali saja), lalu baca memory
- * - SET: tulis ke memory SYNC, tulis ke sheet ASYNC (fire & forget)
- * - Semua error ditangkap, tidak pernah throw ke caller
+ * Fix race condition: write menggunakan antrian (queue) sequential,
+ * bukan concurrent, agar tidak saling timpa saat multiple key ditulis bersamaan.
  */
 
 import { google } from "googleapis"
@@ -16,9 +14,10 @@ type CacheEntry<T> = {
 }
 
 const store = new Map<string, CacheEntry<unknown>>()
-
-// Promise load sheet -- null = belum dimulai, resolved = sudah selesai
 let _loadPromise: Promise<void> | null = null
+
+// Write queue: proses satu per satu agar tidak race condition
+let _writeQueue: Promise<void> = Promise.resolve()
 
 export const CACHE_KEYS = {
   DASHBOARD : "dashboard_kpi",
@@ -63,11 +62,17 @@ function loadFromSheet(): Promise<void> {
       }
       console.log("[cache] Loaded " + loaded + " entries from AI_Cache")
     } catch (e: any) {
-      // Sheet belum ada saat pertama kali = normal
       console.log("[cache] loadFromSheet: " + (e.message ?? "skipped"))
     }
   })()
   return _loadPromise
+}
+
+// Tulis satu key ke sheet secara sequential (antrian)
+function enqueueWrite(key: string, entry: CacheEntry<unknown>): void {
+  _writeQueue = _writeQueue.then(function() {
+    return writeToSheet(key, entry)
+  }).catch(function() {})
 }
 
 async function writeToSheet(key: string, entry: CacheEntry<unknown>): Promise<void> {
@@ -76,7 +81,7 @@ async function writeToSheet(key: string, entry: CacheEntry<unknown>): Promise<vo
   try {
     const sheets = google.sheets({ version:"v4", auth:getAuth() })
 
-    // Buat sheet AI_Cache jika belum ada
+    // Pastikan sheet AI_Cache ada
     try {
       const meta   = await sheets.spreadsheets.get({ spreadsheetId })
       const exists = (meta.data.sheets ?? []).some(function(s: any) {
@@ -87,16 +92,17 @@ async function writeToSheet(key: string, entry: CacheEntry<unknown>): Promise<vo
           spreadsheetId,
           requestBody: { requests:[{ addSheet:{ properties:{ title:CACHE_SHEET } } }] },
         })
+        console.log("[cache] Sheet AI_Cache dibuat")
       }
     } catch { /* abaikan */ }
 
-    // Cari baris existing
+    // Baca semua baris kolom A untuk cari posisi key
     const res    = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: CACHE_SHEET + "!A:A",
     })
-    const rows   = res.data.values ?? []
-    const rowIdx = rows.findIndex(function(r: string[]) { return r[0] === key })
+    const rows   = (res.data.values ?? []) as string[][]
+    const rowIdx = rows.findIndex(function(r) { return r[0] === key })
     const rowNum = rowIdx >= 0 ? rowIdx + 1 : rows.length + 1
 
     const value = JSON.stringify({
@@ -111,14 +117,14 @@ async function writeToSheet(key: string, entry: CacheEntry<unknown>): Promise<vo
       valueInputOption: "RAW",
       requestBody     : { values:[[key, value]] },
     })
+    console.log("[cache] Wrote key '" + key + "' to row " + rowNum)
   } catch (e: any) {
-    console.log("[cache] writeToSheet failed: " + (e.message ?? "unknown"))
+    console.log("[cache] writeToSheet '" + key + "' failed: " + (e.message ?? "unknown"))
   }
 }
 
-// -- Public API --------------------------------------------------
+// Public API
 
-// Async: tunggu load selesai baru return data
 export async function cacheGet<T>(key: string): Promise<CacheEntry<T> | null> {
   await loadFromSheet()
   return (store.get(key) as CacheEntry<T>) ?? null
@@ -135,7 +141,8 @@ export async function cacheSet<T>(
     cached_by: cachedBy,
   }
   store.set(key, entry)
-  writeToSheet(key, entry as CacheEntry<unknown>).catch(function() {})
+  // Enqueue write agar sequential, tidak race condition
+  enqueueWrite(key, entry as CacheEntry<unknown>)
   return entry
 }
 
@@ -149,8 +156,8 @@ export async function cacheInfo(key: string) {
   const hoursAgo   = Math.floor(minutesAgo / 60)
   const minsRest   = minutesAgo % 60
 
-  // Format waktu dalam WIB (UTC+7)
-  const wibDate = new Date(entry.cached_at + 7 * 60 * 60 * 1000)
+  // Tampilkan waktu dalam WIB (UTC+7)
+  const wibDate     = new Date(entry.cached_at + 7 * 60 * 60 * 1000)
   const cachedAtWIB = wibDate.toLocaleString("id-ID", { timeZone:"UTC" })
 
   let ageLabel: string
