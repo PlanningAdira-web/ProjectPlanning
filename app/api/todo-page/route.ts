@@ -12,17 +12,19 @@ export type TodoPageData = { kpi:KPIData; alerts:AlertRow[]; fetched_at:string }
 
 const CACHE_KEY = "todo_page_data"
 
-// Nilai kolom D yang dianggap "selesai / tidak perlu ditampilkan"
+// Nilai kolom D yang dianggap tidak perlu ditampilkan
 const SKIP_VALUES = new Set([
   "done", "selesai", "complete", "completed",
   "#n/a", "#na", "#ref!", "#value!", "#div/0!", "#name?", "#null!", "#num!", "#error!",
+  "--", "-", "n/a", "ok", "oke",
 ])
 
 function isSkip(val: string): boolean {
   const v = val.trim().toLowerCase()
   if (!v) return true                          // kosong
   if (SKIP_VALUES.has(v)) return true          // exact match
-  if (v.startsWith("#")) return true           // semua formula error (#N/A, #REF!, dst)
+  if (v.startsWith("#")) return true           // formula error (#N/A, #REF!, dst)
+  if (/^-+$/.test(v)) return true             // hanya strip: -, --, ---
   return false
 }
 
