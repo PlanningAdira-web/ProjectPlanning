@@ -116,7 +116,7 @@ async function writeToSheet(key: string, entry: CacheEntry<unknown>): Promise<vo
   }
 }
 
-// ── Public API ──────────────────────────────────────────────────
+// -- Public API --------------------------------------------------
 
 // Async: tunggu load selesai baru return data
 export async function cacheGet<T>(key: string): Promise<CacheEntry<T> | null> {
@@ -146,15 +146,31 @@ export async function cacheInfo(key: string) {
     return { has_cache:false, cached_at:null, cached_by:null, age_label:null, minutes_ago:null }
   }
   const minutesAgo = Math.round((Date.now() - entry.cached_at) / 60000)
-  const hoursAgo   = Math.round(minutesAgo / 60)
+  const hoursAgo   = Math.floor(minutesAgo / 60)
+  const minsRest   = minutesAgo % 60
+
+  // Format waktu dalam WIB (UTC+7)
+  const wibDate = new Date(entry.cached_at + 7 * 60 * 60 * 1000)
+  const cachedAtWIB = wibDate.toLocaleString("id-ID", { timeZone:"UTC" })
+
+  let ageLabel: string
+  if (minutesAgo < 1) {
+    ageLabel = "baru saja"
+  } else if (minutesAgo < 60) {
+    ageLabel = minutesAgo + " menit lalu"
+  } else if (hoursAgo < 24) {
+    ageLabel = hoursAgo + " jam " + (minsRest > 0 ? minsRest + " menit " : "") + "lalu"
+  } else {
+    const daysAgo = Math.floor(hoursAgo / 24)
+    ageLabel = daysAgo + " hari lalu"
+  }
+
   return {
     has_cache  : true,
-    cached_at  : new Date(entry.cached_at).toLocaleString("id-ID"),
+    cached_at  : cachedAtWIB,
     cached_by  : entry.cached_by,
     minutes_ago: minutesAgo,
     hours_ago  : hoursAgo,
-    age_label  : minutesAgo < 60
-      ? minutesAgo + " menit lalu"
-      : hoursAgo + " jam lalu",
+    age_label  : ageLabel,
   }
 }
