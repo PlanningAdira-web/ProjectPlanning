@@ -177,7 +177,7 @@ export default function DashboardPage() {
         age_label : "baru saja",
       }))
       setTodoPageData(null)
-      await fetchTodoPage(true)
+      try { await fetchTodoPage(true) } catch(e) { console.error("fetchTodoPage failed:", e) }
       if (d.todo_ai && d.todo_ai.length > 0) {
         await fetch("/api/todo", { method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ action:"sync_ai", items:d.todo_ai }) })
