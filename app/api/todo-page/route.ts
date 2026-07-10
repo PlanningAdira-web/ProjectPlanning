@@ -6,27 +6,25 @@ import { google } from "googleapis"
 export const runtime = "nodejs"
 export const maxDuration = 60
 
-export type KPIData = {
-  kpi_score : string
-  scorecard : string
-  fetched_at: string
-}
+export type KPIData    = { kpi_score:string; scorecard:string; fetched_at:string }
+export type AlertRow   = { spo:string; style:string; start_dst:string; concern:string }
+export type TodoPageData = { kpi:KPIData; alerts:AlertRow[]; fetched_at:string }
 
-export type AlertRow = {
-  spo      : string
-  style    : string
-  start_dst: string
-  concern  : string
-}
+const CACHE_KEY = "todo_page_data"
 
-export type TodoPageData = {
-  kpi       : KPIData
-  alerts    : AlertRow[]
-  fetched_at: string
-}
+// Nilai kolom D yang dianggap "selesai / tidak perlu ditampilkan"
+const SKIP_VALUES = new Set([
+  "done", "selesai", "complete", "completed",
+  "#n/a", "#na", "#ref!", "#value!", "#div/0!", "#name?", "#null!", "#num!", "#error!",
+])
 
-const CACHE_KEY   = "todo_page_data"
-const DONE_VALUES = new Set(["done","selesai","complete","completed"])
+function isSkip(val: string): boolean {
+  const v = val.trim().toLowerCase()
+  if (!v) return true                          // kosong
+  if (SKIP_VALUES.has(v)) return true          // exact match
+  if (v.startsWith("#")) return true           // semua formula error (#N/A, #REF!, dst)
+  return false
+}
 
 function getAuth() {
   return new google.auth.GoogleAuth({
@@ -39,12 +37,11 @@ function getAuth() {
 }
 
 async function fetchTodoPageData(): Promise<TodoPageData> {
-  const auth          = getAuth()
-  const sheets        = google.sheets({ version:"v4", auth })
+  const sheets        = google.sheets({ version:"v4", auth:getAuth() })
   const spreadsheetId = process.env.GOOGLE_SHEET_ID!
 
-  // 1. KPI Score D2 dan Scorecard K2
-  const kpiRes    = await sheets.spreadsheets.values.batchGet({
+  // 1. KPI Score (D2) dan Scorecard (K2)
+  const kpiRes = await sheets.spreadsheets.values.batchGet({
     spreadsheetId,
     ranges           : ["KPI&Scorecard!D2", "KPI&Scorecard!K2"],
     valueRenderOption: "FORMATTED_VALUE",
@@ -53,85 +50,40 @@ async function fetchTodoPageData(): Promise<TodoPageData> {
   const kpiScore  = String(kpiRanges[0]?.values?.[0]?.[0] ?? "--")
   const scorecard = String(kpiRanges[1]?.values?.[0]?.[0] ?? "--")
 
-  // 2. Baca seluruh sheet Alerts
+  // 2. Baca Alerts kolom A:D saja
+  //    Baris 1 = header (SPO, STYLE, START DST, Concern)
+  //    Baris 2 dst = data
+  //    Tampilkan jika kolom D bukan: kosong, Done, #N/A, error formula
   const alertRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range            : "Alerts",
+    range            : "Alerts!A:D",
     valueRenderOption: "FORMATTED_VALUE",
   })
-  const allRows = alertRes.data.values ?? []
+
+  const rows   = alertRes.data.values ?? []
   const alerts: AlertRow[] = []
 
-  if (allRows.length > 1) {
-    // Cari baris header (baris yang mengandung "SPO" di salah satu kolom)
-    let headerRowIdx = 0
-    for (let i = 0; i < Math.min(5, allRows.length); i++) {
-      if (allRows[i].some(function(c: any) { return String(c ?? "").trim().toUpperCase() === "SPO" })) {
-        headerRowIdx = i
-        break
-      }
-    }
+  // Skip baris 0 (header)
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]
+    if (!row || row.length === 0) continue
 
-    const header = allRows[headerRowIdx].map(function(h: any) {
-      return String(h ?? "").trim().toLowerCase()
-    })
+    const spo     = String(row[0] ?? "").trim()
+    const style   = String(row[1] ?? "").trim()
+    const dst     = String(row[2] ?? "").trim()
+    const concern = String(row[3] ?? "").trim()
 
-    // Cari index kolom dari header
-    const iSPO     = header.findIndex(function(h: string) { return h === "spo" })
-    const iStyle   = header.findIndex(function(h: string) { return h === "style" })
-    const iDST     = header.findIndex(function(h: string) {
-      return h === "start dst" || (h.includes("start") && h.includes("dst"))
-    })
-    const iConcern = header.findIndex(function(h: string) { return h === "concern" })
+    // Skip jika SPO kosong (baris kosong)
+    if (!spo) continue
 
-    // Cari kolom status -- bisa di kolom mana saja setelah kolom data utama
-    // Berdasarkan screenshot: kolom I (index 8 dari A) berisi "Done"
-    // Tapi cari secara dinamis dulu
-    const iStatus = header.findIndex(function(h: string) {
-      return h === "status" || h === "done" || h === "selesai" || h === "complete" || h === "ket"
-    })
+    // Skip jika kolom Concern adalah Done / error / kosong
+    if (isSkip(concern)) continue
 
-    // Fallback ke posisi default berdasarkan screenshot: A=0 B=1 C=2 D=3
-    const colSPO     = iSPO     >= 0 ? iSPO     : 0
-    const colStyle   = iStyle   >= 0 ? iStyle   : 1
-    const colDST     = iDST     >= 0 ? iDST     : 2
-    const colConcern = iConcern >= 0 ? iConcern : 3
-
-    for (let r = headerRowIdx + 1; r < allRows.length; r++) {
-      const row = allRows[r]
-      if (!row || row.length === 0) continue
-
-      const spo     = String(row[colSPO]     ?? "").trim()
-      const style   = String(row[colStyle]   ?? "").trim()
-      const dst     = String(row[colDST]     ?? "").trim()
-      const concern = String(row[colConcern] ?? "").trim()
-
-      // Skip baris yang benar-benar kosong di kolom utama
-      if (!spo && !style) continue
-
-      // Cek status di semua kolom yang mungkin mengandung "Done"
-      // Berdasarkan screenshot, kolom Done bisa ada di kolom I (index 8)
-      // atau di kolom manapun setelah D
-      let isDone = false
-      if (iStatus >= 0) {
-        const statusVal = String(row[iStatus] ?? "").trim().toLowerCase()
-        isDone = DONE_VALUES.has(statusVal)
-      } else {
-        // Scan semua kolom dari index 4 ke kanan untuk cari kata "Done"
-        for (let c = 4; c < row.length; c++) {
-          const cellVal = String(row[c] ?? "").trim().toLowerCase()
-          if (DONE_VALUES.has(cellVal)) { isDone = true; break }
-        }
-      }
-
-      if (isDone) continue
-
-      alerts.push({ spo, style, start_dst:dst, concern })
-    }
+    alerts.push({ spo, style, start_dst:dst, concern })
   }
 
   return {
-    kpi      : { kpi_score:kpiScore, scorecard, fetched_at:new Date().toLocaleString("id-ID") },
+    kpi: { kpi_score:kpiScore, scorecard, fetched_at:new Date().toLocaleString("id-ID") },
     alerts,
     fetched_at: new Date().toLocaleString("id-ID"),
   }
