@@ -15,6 +15,8 @@ type CacheEntry<T> = {
 
 const store = new Map<string, CacheEntry<unknown>>()
 let _loadPromise: Promise<void> | null = null
+let _loadedAt  : number = 0
+const LOAD_TTL_MS = 30 * 1000        // Re-load dari sheet setiap 30 detik
 
 // Write queue: proses satu per satu agar tidak race condition
 let _writeQueue: Promise<void> = Promise.resolve()
@@ -40,7 +42,14 @@ function getAuth() {
 }
 
 function loadFromSheet(): Promise<void> {
+  // Reset singleton jika TTL expired (default 30 detik)
+  if (_loadPromise && (Date.now() - _loadedAt) > LOAD_TTL_MS) {
+    _loadPromise = null
+    store.clear()
+    console.log("[cache] TTL expired, reloading from sheet")
+  }
   if (_loadPromise) return _loadPromise
+  _loadedAt    = Date.now()
   _loadPromise = (async function() {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID
     if (!spreadsheetId) return
@@ -143,6 +152,9 @@ export async function cacheSet<T>(
   store.set(key, entry)
   // Enqueue write agar sequential, tidak race condition
   enqueueWrite(key, entry as CacheEntry<unknown>)
+  // Reset TTL timer agar loadAt menjadi sekarang
+  // Sehingga instance lain yang load ulang akan dapat data terbaru dari sheet
+  _loadedAt = Date.now()
   return entry
 }
 
