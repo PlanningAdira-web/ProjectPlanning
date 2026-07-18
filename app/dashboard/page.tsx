@@ -343,7 +343,7 @@ export default function DashboardPage() {
       { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
       { h:"Fact",         w:40,  l:502, a:"center" },
       { h:"DST",          w:56,  l:542, a:"right"  },
-      { h:"SEW",          w:56,  l:598, a:"right"  },
+      { h:"SEW",          w:64,  l:598, a:"right"  },
     ] as { h:string; w:number; l:number; a:string }[]
 
     const sth = function(col: typeof FREEZE[0], i: number) {
@@ -363,7 +363,8 @@ export default function DashboardPage() {
         position:"sticky" as const, left:col.l, zIndex:1,
         background:bg, padding:"5px 8px",
         borderBottom:"0.5px solid #e0ece0",
-        borderRight: i===6 ? "2px solid #c8e6c9" : "0.5px solid #c8e6c9",
+        borderRight: i===6 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
+        boxShadow: i===6 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
         whiteSpace:"nowrap" as const, minWidth:col.w,
         textAlign:col.a as any,
       }, extra || {})
@@ -495,12 +496,12 @@ export default function DashboardPage() {
       { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
       { h:"Fact",         w:40,  l:502, a:"center" },
       { h:"DST",          w:56,  l:542, a:"right"  },
-      { h:"SEW",          w:56,  l:598, a:"right"  },
+      { h:"SEW",          w:64,  l:598, a:"right"  },
     ] as { h:string; w:number; l:number; a:string }[]
 
     const stickyTh = function(col: typeof FREEZE_COLS[0], i: number) {
       return {
-        position:"sticky" as const, top:0, left:col.l, zIndex:4+i,
+        position:"sticky" as const, top:0, left:col.l, zIndex:10+i,
         background: i===8 ? "#1b4d24" : "#1a5c2a",
         color:"#fff", padding:"5px 8px", fontWeight:500,
         whiteSpace:"nowrap" as const, minWidth:col.w,
@@ -512,10 +513,11 @@ export default function DashboardPage() {
 
     const stickyTd = function(col: typeof FREEZE_COLS[0], i: number, bg: string, extra?: any) {
       return Object.assign({
-        position:"sticky" as const, left:col.l, zIndex:1,
+        position:"sticky" as const, left:col.l, zIndex:5,
         background:bg, padding:"5px 8px",
         borderBottom:"0.5px solid #e0ece0",
-        borderRight: i===8 ? "2px solid #c8e6c9" : "0.5px solid #c8e6c9",
+        borderRight: i===8 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
+        boxShadow: i===8 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
         whiteSpace:"nowrap" as const,
         minWidth:col.w,
         textAlign:col.a as any,
@@ -525,7 +527,7 @@ export default function DashboardPage() {
     return (
       <div>
         <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
-          <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+          <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content", tableLayout:"auto" }}>
             <thead>
               <tr>
                 {FREEZE_COLS.map(function(col, i) {
@@ -535,10 +537,10 @@ export default function DashboardPage() {
                   const isCurr = currWeek.has(d)
                   return (
                     <th key={d} style={{
-                      position:"sticky", top:0, zIndex:2,
+                      position:"sticky", top:0, zIndex:1,
                       background: isCurr ? "#2e7d32" : "#1a5c2a",
                       color:"#fff", padding:"5px 8px", fontWeight:500,
-                      whiteSpace:"nowrap", minWidth:54, textAlign:"center",
+                      whiteSpace:"nowrap", minWidth:56, textAlign:"center",
                       borderRight:"0.5px solid rgba(255,255,255,.1)",
                       borderBottom:"1px solid rgba(255,255,255,.2)",
                     }}>{d}</th>
