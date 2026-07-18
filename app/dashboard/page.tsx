@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "todo"|"vis"|"sim"|"ai"
+type Page  = "todo"|"vis"|"plandst"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -44,6 +44,9 @@ export default function DashboardPage() {
   const [newTodo,    setNewTodo]    = useState("")
   const [showAddTodo,setShowAddTodo]= useState(false)
   const [todoPageData,  setTodoPageData]  = useState<any>(null)
+  const [planDstData,   setPlanDstData]   = useState<any>(null)
+  const [planDstFactory,setPlanDstFactory]= useState("K")
+  const [planDstLoading,setPlanDstLoading]= useState(false)
   const [jobdescs,       setJobdescs]       = useState<any[]>([])
   const [todoPageLoading,setTodoPageLoading] = useState(false)
   const [aiMsgs,     setAiMsgs]    = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
@@ -149,6 +152,17 @@ export default function DashboardPage() {
     })
     fetchJobdescs()
   }
+
+  useEffect(function() {
+    if (page !== "plandst") return
+    if (planDstData) return
+    setPlanDstLoading(true)
+    fetch("/api/plan-dst")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setPlanDstData(d.data) })
+      .catch(function() {})
+      .finally(function() { setPlanDstLoading(false) })
+  }, [page, planDstData])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -274,6 +288,170 @@ export default function DashboardPage() {
   function goChat(msg: string) { setPage("ai"); setTimeout(function() { sendAI(msg) }, 200) }
 
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
+
+  function PlanDstTable() {
+    if (planDstLoading) return (
+      <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+        Memuat data dari sheet Plan DST...
+      </div>
+    )
+    if (!planDstData) return (
+      <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+        Gagal memuat data. Pastikan sheet Plan DST tersedia.
+      </div>
+    )
+    const rows: any[]    = planDstData.rows[planDstFactory] ?? []
+    const dates: string[]= planDstData.date_headers ?? []
+    const today          = new Date()
+    const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
+
+    const currWeek = new Set(
+      dates.filter(function(d: string) {
+        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        const p = d.split("-")
+        const mIdx = months.findIndex(function(m: string) { return m === p[1] })
+        if (mIdx < 0) return false
+        const year = todayWIB.getFullYear()
+        const dt   = new Date(year, mIdx, parseInt(p[0]))
+        const diff = (dt.getTime() - todayWIB.getTime()) / 86400000
+        return diff >= 0 && diff < 7
+      })
+    )
+
+    const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
+
+    const FREEZE_COLS = [
+      { h:"LINE",         w:44,  l:0,   a:"left"   },
+      { h:"SPO",          w:68,  l:44,  a:"left"   },
+      { h:"STYLE",        w:160, l:112, a:"left"   },
+      { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
+      { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
+      { h:"ENCANA F.PRC", w:90,  l:412, a:"left"   },
+      { h:"Fact",         w:40,  l:502, a:"center" },
+      { h:"Baru",         w:40,  l:542, a:"center" },
+      { h:"DST",          w:48,  l:582, a:"center" },
+    ] as { h:string; w:number; l:number; a:string }[]
+
+    const stickyTh = function(col: typeof FREEZE_COLS[0], i: number) {
+      return {
+        position:"sticky" as const, top:0, left:col.l, zIndex:4+i,
+        background: i===8 ? "#1b4d24" : "#1a5c2a",
+        color:"#fff", padding:"5px 8px", fontWeight:500,
+        whiteSpace:"nowrap" as const, minWidth:col.w,
+        textAlign:col.a as any,
+        borderRight: i===8 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.15)",
+        borderBottom:"1px solid rgba(255,255,255,.2)",
+      }
+    }
+
+    const stickyTd = function(col: typeof FREEZE_COLS[0], i: number, bg: string, extra?: any) {
+      return Object.assign({
+        position:"sticky" as const, left:col.l, zIndex:1,
+        background:bg, padding:"5px 8px",
+        borderBottom:"0.5px solid #e0ece0",
+        borderRight: i===8 ? "2px solid #c8e6c9" : "0.5px solid #c8e6c9",
+        whiteSpace:"nowrap" as const,
+        minWidth:col.w,
+        textAlign:col.a as any,
+      }, extra || {})
+    }
+
+    return (
+      <div>
+        <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
+          <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+            <thead>
+              <tr>
+                {FREEZE_COLS.map(function(col, i) {
+                  return <th key={i} style={stickyTh(col, i)}>{col.h}</th>
+                })}
+                {dates.map(function(d: string) {
+                  const isCurr = currWeek.has(d)
+                  return (
+                    <th key={d} style={{
+                      position:"sticky", top:0, zIndex:2,
+                      background: isCurr ? "#2e7d32" : "#1a5c2a",
+                      color:"#fff", padding:"5px 8px", fontWeight:500,
+                      whiteSpace:"nowrap", minWidth:54, textAlign:"center",
+                      borderRight:"0.5px solid rgba(255,255,255,.1)",
+                      borderBottom:"1px solid rgba(255,255,255,.2)",
+                    }}>{d}</th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map(function(line: any, li: number) {
+                const lr   = rows.filter(function(r: any) { return r.line === line })
+                const bg   = li % 2 === 0 ? "#e8f5e9" : "#fff"
+                const bgCr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
+                return lr.map(function(row: any, ri: number) {
+                  return (
+                    <tr key={String(li)+"-"+String(ri)}>
+                      <td style={stickyTd(FREEZE_COLS[0], 0, bg)}>
+                        {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
+                      </td>
+                      <td style={Object.assign(stickyTd(FREEZE_COLS[1], 1, bg), { color:C.blue })}>
+                        {row.spo}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[2], 2, bg, { maxWidth:160, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>
+                        {row.style}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[3], 3, bg, { fontWeight:500 })}>
+                        {row.qty_order ? Number(row.qty_order).toLocaleString("id-ID") : ""}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[4], 4, bg, { fontWeight:500 })}>
+                        {row.qty_plan ? Number(row.qty_plan).toLocaleString("id-ID") : ""}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[5], 5, bg, { fontSize:9, color:C.tx2, fontStyle:"italic" })}>
+                        {row.fprc}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[6], 6, bg, { textAlign:"center" })}>
+                        <span style={{ background:"#fff3e0", color:C.org, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>
+                          {row.fact}
+                        </span>
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[7], 7, bg, { textAlign:"center", fontSize:9, color:C.tx3 })}>
+                        {row.baru}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[8], 8, bg, { textAlign:"center" })}>
+                        {row.dst !== "" && row.dst !== 0
+                          ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("id-ID")}</span>
+                          : ""}
+                      </td>
+                      {dates.map(function(d: string) {
+                        const val    = row.dates[d]
+                        const cellBg = currWeek.has(d) ? bgCr : bg
+                        return (
+                          <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
+                            {val === "F"
+                              ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
+                              : (val !== "" && val !== undefined && val !== null)
+                                ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(val).toLocaleString("id-ID")}</span>
+                                : null}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+          <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
+          <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
+          <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
+          <span style={{ color:C.red, fontWeight:700 }}>F</span><span>= Akhir planning</span>
+          <span style={{ marginLeft:"auto" }}>Kolom J & K disembunyikan - Scroll kanan untuk semua tanggal</span>
+          {planDstData?.fetched_epoch && (
+            <span>Update: {ageLabel(planDstData.fetched_epoch)}</span>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   if (!user) {
     return <div style={{ height:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui", color:C.tx3 }}>Memuat...</div>
@@ -478,6 +656,7 @@ export default function DashboardPage() {
         {([
           ["todo","Planning To-Do & Concern"],
           ["vis","Dashboard Planning"],
+          ["plandst","Planning Distribusi"],
           ["sim","Planning Simulation"],
           ["ai","AI Planning Assistant"],
         ] as [Page,string][]).map(function([p,label]) {
@@ -663,6 +842,32 @@ export default function DashboardPage() {
               </a>
             </div>
             <iframe src={LOOKER_EMBED} width="100%" height="520" style={{ border:"none", display:"block" }} allowFullScreen title="Dashboard Planning"/>
+          </div>
+        )}
+
+        {/* == PLANNING DISTRIBUSI == */}
+        {page==="plandst" && (
+          <div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Planning Distribusi - Plan DST</span>
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                {planDstData?.factories?.map(function(f: string) {
+                  return (
+                    <button key={f} onClick={function() { setPlanDstFactory(f) }}
+                      style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
+                        background:planDstFactory===f?C.gdark:"#fff",
+                        color:planDstFactory===f?"#fff":C.tx2, cursor:"pointer" }}>
+                      Line {f}
+                    </button>
+                  )
+                })}
+                <button onClick={function() { setPlanDstData(null) }}
+                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+            <PlanDstTable/>
           </div>
         )}
 
