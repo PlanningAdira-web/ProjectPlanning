@@ -25,11 +25,11 @@ export type PlanDSTData = {
   rows        : Record<string, PlanDSTRow[]>
   fetched_at  : string
   fetched_epoch: number
+  debug?      : any
 }
 
 const CACHE_KEY       = "plan_dst_data"
 const VALID_FACTORIES = new Set(["A","F","K"])
-const MONTHS_EN       = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
 function getAuth() {
   return new google.auth.GoogleAuth({
@@ -41,27 +41,7 @@ function getAuth() {
   })
 }
 
-function normalizeDate(raw: string): string {
-  const s = raw.trim()
-  // Format DD-Mon (e.g. "06-Jul") -- sudah clean
-  if (/^\d{1,2}-[A-Za-z]{3}$/.test(s)) {
-    return String(parseInt(s)).padStart(2,"0") + "-" + s.split("-")[1]
-  }
-  // Format D-Mon-YY or D-Mon-YYYY (e.g. "7-Jul-26")
-  if (/^\d{1,2}-[A-Za-z]{3}-\d{2,4}$/.test(s)) {
-    return s  // pertahankan apa adanya dari header sheet
-  }
-  // Format DD/MM/YYYY
-  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) {
-    const parts = s.split("/")
-    const d = String(parseInt(parts[0])).padStart(2,"0")
-    const m = MONTHS_EN[parseInt(parts[1]) - 1] ?? "?"
-    return d + "-" + m
-  }
-  return s
-}
-
-async function fetchPlanDST(): Promise<PlanDSTData> {
+async function fetchPlanDST(debug = false): Promise<PlanDSTData> {
   const sheets        = google.sheets({ version:"v4", auth:getAuth() })
   const spreadsheetId = process.env.GOOGLE_SHEET_ID!
 
@@ -74,49 +54,47 @@ async function fetchPlanDST(): Promise<PlanDSTData> {
   const raw = res.data.values ?? []
   if (raw.length < 2) throw new Error("Sheet 'Plan DST' kosong atau tidak ditemukan")
 
-  // Baris 0 = header
+  // Baris 0 = header — baca apa adanya
   const header = raw[0].map(function(h: any) { return String(h ?? "").trim() })
 
-  // Cari index kolom tetap berdasar nama
-  const idx = function(names: string[]) {
-    for (const n of names) {
-      const i = header.findIndex(function(h: string) { return h.toLowerCase() === n.toLowerCase() })
-      if (i >= 0) return i
+  // Debug: kembalikan header untuk diagnosa
+  if (debug) {
+    return {
+      factories: [], date_headers: [], rows: {},
+      fetched_at: "", fetched_epoch: 0,
+      debug: { header, row2: raw[1] ?? [], total_rows: raw.length }
     }
-    return -1
   }
 
-  const iLine = idx(["LINE","LINE E","INE BAR"])
-  const iSPO  = idx(["SPO"])
-  const iStyle= idx(["STYLE"])
-  const iQtyO = idx(["QTY ORDER"])
-  const iQtyP = idx(["QTY PLAN"])
-  const iFPRC = idx(["ENCANA F.PRC","ENCANA F. PRC","F.PRC","RENCANA F.PROD","RENCANA F. PROD"])
-  const iFact = idx(["FACT","FACT I","FACTORY"])
-  const iBaru = idx(["BARU"])
-  const iDST  = idx(["DST"])
+  // Deteksi kolom tetap -- cari berdasarkan posisi (A=0, B=1, C=2, dst)
+  // Berdasarkan screenshot: A=LINE, B=SPO, C=STYLE, D=QTY ORDER, E=QTY PLAN,
+  // F=ENCANA F.PRC, G=Fact, H=Baru, I=DST, J=SEW(hide), K=kosong(hide), L+=tanggal
+  const iLine = 0   // A
+  const iSPO  = 1   // B
+  const iStyle= 2   // C
+  const iQtyO = 3   // D
+  const iQtyP = 4   // E
+  const iFPRC = 5   // F
+  const iFact = 6   // G
+  const iBaru = 7   // H
+  const iDST  = 8   // I
+  // J=9 dan K=10 di-skip (hidden)
+  const firstDateCol = 11  // L
 
-  // Kolom J dan K yang di-hide: index 9 dan 10 (0-based)
-  // Kolom tanggal dimulai setelah DST (index iDST+1), skip J dan K
-  const HIDE_COLS = new Set([9, 10])  // J=9, K=10
-
-  // Kumpulkan kolom tanggal: setelah kolom tetap, skip J dan K
-  const firstDateCol = Math.max(iLine, iSPO, iStyle, iQtyO, iQtyP, iFPRC, iFact, iBaru, iDST) + 1
+  // Kumpulkan header tanggal dari kolom L ke kanan
   const dateHeaders: string[] = []
   const dateColMap : Record<number, string> = {}
 
   for (let c = firstDateCol; c < header.length; c++) {
-    if (HIDE_COLS.has(c)) continue  // skip kolom J dan K
     const h = header[c].trim()
     if (!h) continue
-    // Deteksi kolom tanggal
+    // Terima semua format: "06-Jul", "7-Jul-26", "8-Jul-26", dll
     const isDate =
       /^\d{1,2}-[A-Za-z]{3}(-\d{2,4})?$/.test(h) ||
       /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(h)
     if (!isDate) continue
-    const label = normalizeDate(h)
-    if (!dateHeaders.includes(label)) dateHeaders.push(label)
-    dateColMap[c] = label
+    if (!dateHeaders.includes(h)) dateHeaders.push(h)
+    dateColMap[c] = h
   }
 
   // Parse data rows
@@ -132,19 +110,20 @@ async function fetchPlanDST(): Promise<PlanDSTData> {
     const fact  = String(row[iFact]  ?? "").trim()
 
     // Stop di baris History
-    if (["history","History","HISTORY"].includes(fact) ||
-        ["history","History","HISTORY"].includes(line)) break
+    if (fact.toLowerCase() === "history" || line.toLowerCase() === "history") break
 
     // Skip baris tidak valid
     if (!line || !spo || !style) continue
+
+    // Filter factory valid saja
     if (!VALID_FACTORIES.has(fact)) continue
 
-    const qty_order = parseFloat(String(row[iQtyO] ?? "0").replace(/[.,\s]/g,"")) || 0
-    const qty_plan  = parseFloat(String(row[iQtyP] ?? "0").replace(/[.,\s]/g,"")) || 0
+    const qty_order = parseFloat(String(row[iQtyO] ?? "0").replace(/[.,]/g,"").replace(/\s/g,"")) || 0
+    const qty_plan  = parseFloat(String(row[iQtyP] ?? "0").replace(/[.,]/g,"").replace(/\s/g,"")) || 0
     const fprc      = String(row[iFPRC] ?? "").trim()
     const baru      = String(row[iBaru] ?? "").trim()
     const dstRaw    = String(row[iDST]  ?? "").trim()
-    const dst       = parseFloat(dstRaw.replace(/[.,\s]/g,"")) || ""
+    const dst: number | "" = parseFloat(dstRaw.replace(/[.,]/g,"")) || ""
 
     const dates: Record<string, number | "F" | ""> = {}
     for (const [colStr, label] of Object.entries(dateColMap)) {
@@ -155,7 +134,7 @@ async function fetchPlanDST(): Promise<PlanDSTData> {
       } else if (val.toUpperCase() === "F") {
         dates[label] = "F"
       } else {
-        const n = parseFloat(val.replace(/[.,\s]/g,""))
+        const n = parseFloat(val.replace(/[.,]/g,""))
         dates[label] = isNaN(n) ? "" : n
       }
     }
@@ -189,6 +168,17 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error:"Login diperlukan" }, { status:401 })
 
   const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1"
+  const isDebug      = req.nextUrl.searchParams.get("debug")   === "1"
+
+  // Mode debug: kembalikan header sheet untuk diagnosa
+  if (isDebug) {
+    try {
+      const data = await fetchPlanDST(true)
+      return NextResponse.json({ ok:true, debug:data.debug })
+    } catch (e: any) {
+      return NextResponse.json({ ok:false, error:e.message })
+    }
+  }
 
   if (!forceRefresh) {
     const cached = await cacheGet<PlanDSTData>(CACHE_KEY)
@@ -196,7 +186,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const data = await fetchPlanDST()
+    const data = await fetchPlanDST(false)
     await cacheSet(CACHE_KEY, data, user.username)
     return NextResponse.json({ ok:true, data })
   } catch (e: any) {
