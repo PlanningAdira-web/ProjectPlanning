@@ -331,17 +331,19 @@ export default function DashboardPage() {
       })
     )
 
-    const lines = Array.from(new Set(rows.map(function(r: any) { return r.line_baru })))
+    const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
 
     // Freeze 7 kolom: A-G
     const FREEZE = [
-      { h:"LINE BARU",      w:60,  l:0,   a:"left"   },
-      { h:"SPO",            w:68,  l:60,  a:"left"   },
-      { h:"STYLE",          w:160, l:128, a:"left"   },
-      { h:"QTY ORDER",      w:72,  l:288, a:"right"  },
-      { h:"QTY PLAN",       w:68,  l:360, a:"right"  },
-      { h:"RENCANA F.PR",   w:88,  l:428, a:"left"   },
-      { h:"Fact Baru",      w:60,  l:516, a:"center" },
+      { h:"LINE",         w:44,  l:0,   a:"left"   },
+      { h:"SPO",          w:68,  l:44,  a:"left"   },
+      { h:"STYLE",        w:160, l:112, a:"left"   },
+      { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
+      { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
+      { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
+      { h:"Fact",         w:40,  l:502, a:"center" },
+      { h:"DST",          w:56,  l:542, a:"right"  },
+      { h:"SEW",          w:56,  l:598, a:"right"  },
     ] as { h:string; w:number; l:number; a:string }[]
 
     const sth = function(col: typeof FREEZE[0], i: number) {
@@ -392,14 +394,14 @@ export default function DashboardPage() {
             </thead>
             <tbody>
               {lines.map(function(line: any, li: number) {
-                const lr   = rows.filter(function(r: any) { return r.line_baru === line })
+                const lr   = rows.filter(function(r: any) { return r.line === line })
                 const bg   = li % 2 === 0 ? "#e8f5e9" : "#fff"
                 const bgCr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
                 return lr.map(function(row: any, ri: number) {
                   return (
                     <tr key={String(li)+"-"+String(ri)}>
                       <td style={std(FREEZE[0], 0, bg)}>
-                        {ri===0 && <strong style={{ color:C.gdark }}>{row.line_baru}</strong>}
+                        {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
                       </td>
                       <td style={Object.assign(std(FREEZE[1], 1, bg), { color:C.blue })}>{row.spo}</td>
                       <td style={std(FREEZE[2], 2, bg, { maxWidth:160, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
@@ -408,8 +410,18 @@ export default function DashboardPage() {
                       <td style={std(FREEZE[5], 5, bg, { fontSize:9, color:C.tx2, fontStyle:"italic" })}>{row.fprc}</td>
                       <td style={std(FREEZE[6], 6, bg, { textAlign:"center" })}>
                         <span style={{ background:"#e0f2f1", color:C.teal, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>
-                          {row.fact_baru}
+                          {row.fact}
                         </span>
+                      </td>
+                      <td style={std(FREEZE[7], 7, bg, { textAlign:"right" })}>
+                        {row.dst !== "" && row.dst !== 0
+                          ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("id-ID")}</span>
+                          : ""}
+                      </td>
+                      <td style={std(FREEZE[8], 8, bg, { textAlign:"right" })}>
+                        {row.sew !== "" && row.sew !== 0
+                          ? <span style={{ color:C.teal, fontWeight:500 }}>{Number(row.sew).toLocaleString("id-ID")}</span>
+                          : ""}
                       </td>
                       {dates.map(function(d: string) {
                         const val    = row.dates[d]
@@ -480,10 +492,10 @@ export default function DashboardPage() {
       { h:"STYLE",        w:160, l:112, a:"left"   },
       { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
       { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
-      { h:"ENCANA F.PRC", w:90,  l:412, a:"left"   },
+      { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
       { h:"Fact",         w:40,  l:502, a:"center" },
-      { h:"Baru",         w:40,  l:542, a:"center" },
-      { h:"DST",          w:48,  l:582, a:"center" },
+      { h:"DST",          w:56,  l:542, a:"right"  },
+      { h:"SEW",          w:56,  l:598, a:"right"  },
     ] as { h:string; w:number; l:number; a:string }[]
 
     const stickyTh = function(col: typeof FREEZE_COLS[0], i: number) {
@@ -565,12 +577,14 @@ export default function DashboardPage() {
                           {row.fact}
                         </span>
                       </td>
-                      <td style={stickyTd(FREEZE_COLS[7], 7, bg, { textAlign:"center", fontSize:9, color:C.tx3 })}>
-                        {row.baru}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[8], 8, bg, { textAlign:"center" })}>
+                      <td style={stickyTd(FREEZE_COLS[7], 7, bg, { textAlign:"right" })}>
                         {row.dst !== "" && row.dst !== 0
                           ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("id-ID")}</span>
+                          : ""}
+                      </td>
+                      <td style={stickyTd(FREEZE_COLS[8], 8, bg, { textAlign:"right" })}>
+                        {row.sew !== "" && row.sew !== 0
+                          ? <span style={{ color:C.teal, fontWeight:500 }}>{Number(row.sew).toLocaleString("id-ID")}</span>
                           : ""}
                       </td>
                       {dates.map(function(d: string) {
@@ -598,7 +612,7 @@ export default function DashboardPage() {
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
           <span style={{ color:C.red, fontWeight:700 }}>F</span><span>= Akhir planning</span>
-          <span style={{ marginLeft:"auto" }}>Kolom J & K disembunyikan - Scroll kanan untuk semua tanggal</span>
+          <span style={{ marginLeft:"auto" }}>Freeze s/d kolom SEW (I) - Scroll kanan untuk semua tanggal</span>
           {planDstData?.fetched_epoch && (
             <span>Update: {ageLabel(planDstData.fetched_epoch)}</span>
           )}

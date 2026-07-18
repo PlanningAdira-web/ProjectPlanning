@@ -7,14 +7,16 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 export type PlanSEWRow = {
-  line_baru : string
-  spo       : string
-  style     : string
-  qty_order : number
-  qty_plan  : number
-  fprc      : string
-  fact_baru : string
-  dates     : Record<string, number | "F" | "">
+  line     : string
+  spo      : string
+  style    : string
+  qty_order: number
+  qty_plan : number
+  fprc     : string
+  fact     : string
+  dst      : number | ""
+  sew      : number | ""
+  dates    : Record<string, number | "F" | "">
 }
 
 export type PlanSEWData = {
@@ -53,20 +55,21 @@ async function fetchPlanSEW(): Promise<PlanSEWData> {
 
   const header = raw[0].map(function(h: any) { return String(h ?? "").trim() })
 
-  // Posisi kolom tetap berdasar screenshot:
-  // A=LINE BARU, B=SPO, C=STYLE, D=QTY ORDER, E=QTY PLAN, F=RENCANA F.PR, G=Fact Baru
-  const iLine = 0  // A - LINE BARU
-  const iSPO  = 1  // B - SPO
-  const iStyle= 2  // C - STYLE
-  const iQtyO = 3  // D - QTY ORDER
-  const iQtyP = 4  // E - QTY PLAN
-  const iFPRC = 5  // F - RENCANA F.PR
-  const iFact = 6  // G - Fact Baru
-  // H (index 7) dan seterusnya = kolom tanggal
+  // Struktur Plan SEW (berdasar screenshot):
+  // A=0 LINE, B=1 SPO, C=2 STYLE, D=3 QTY ORDER, E=4 QTY PLAN,
+  // F=5 RENCANA F.PROD, G=6 Fact, H=7 DST, I=8 SEW
+  // J=9 dan seterusnya = tanggal (tidak ada hidden kolom)
+  const iLine = 0
+  const iSPO  = 1
+  const iStyle= 2
+  const iQtyO = 3
+  const iQtyP = 4
+  const iFPRC = 5
+  const iFact = 6
+  const iDST  = 7
+  const iSEW  = 8
+  const firstDateCol = 9   // J dan seterusnya
 
-  const firstDateCol = 7  // H
-
-  // Kumpulkan header tanggal dari kolom H ke kanan
   const dateHeaders: string[] = []
   const dateColMap : Record<number, string> = {}
 
@@ -81,7 +84,6 @@ async function fetchPlanSEW(): Promise<PlanSEWData> {
     dateColMap[c] = h
   }
 
-  // Parse data rows
   const factoryRows: Record<string, PlanSEWRow[]> = {}
 
   for (let r = 1; r < raw.length; r++) {
@@ -93,55 +95,42 @@ async function fetchPlanSEW(): Promise<PlanSEWData> {
     const style = String(row[iStyle] ?? "").trim()
     const fact  = String(row[iFact]  ?? "").trim()
 
-    // Stop di baris History
     if (fact.toLowerCase() === "history" || line.toLowerCase() === "history") break
-
-    // Skip baris kosong
     if (!line || !spo || !style) continue
-
-    // Ambil satu huruf pertama dari fact untuk filter
-    const factKey = fact.replace(/[^AFK]/g,"").charAt(0)
-    if (!VALID_FACTORIES.has(factKey)) continue
+    if (!VALID_FACTORIES.has(fact)) continue
 
     const qty_order = parseFloat(String(row[iQtyO] ?? "0").replace(/[.,]/g,"")) || 0
     const qty_plan  = parseFloat(String(row[iQtyP] ?? "0").replace(/[.,]/g,"")) || 0
     const fprc      = String(row[iFPRC] ?? "").trim()
+    const dst: number | "" = parseFloat(String(row[iDST] ?? "").replace(/[.,]/g,"")) || ""
+    const sew: number | "" = parseFloat(String(row[iSEW] ?? "").replace(/[.,]/g,"")) || ""
 
     const dates: Record<string, number | "F" | ""> = {}
     for (const [colStr, label] of Object.entries(dateColMap)) {
       const c   = parseInt(colStr)
       const val = String(row[c] ?? "").trim()
-      if (!val || val === "0") {
-        dates[label] = ""
-      } else if (val.toUpperCase() === "F") {
-        dates[label] = "F"
-      } else {
+      if (!val || val === "0") { dates[label] = "" }
+      else if (val.toUpperCase() === "F") { dates[label] = "F" }
+      else {
         const n = parseFloat(val.replace(/[.,]/g,""))
         dates[label] = isNaN(n) ? "" : n
       }
     }
 
-    if (!factoryRows[factKey]) factoryRows[factKey] = []
-    factoryRows[factKey].push({ line_baru:line, spo, style, qty_order, qty_plan, fprc, fact_baru:fact, dates })
+    if (!factoryRows[fact]) factoryRows[fact] = []
+    factoryRows[fact].push({ line, spo, style, qty_order, qty_plan, fprc, fact, dst, sew, dates })
   }
 
   const factories = Object.keys(factoryRows).sort()
   for (const f of factories) {
     factoryRows[f].sort(function(a, b) {
-      return a.line_baru.localeCompare(b.line_baru, undefined, { numeric:true })
+      return a.line.localeCompare(b.line, undefined, { numeric:true })
     })
   }
 
   const now    = Date.now()
   const wibStr = new Date(now + 7 * 60 * 60 * 1000).toLocaleString("id-ID", { timeZone:"UTC" })
-
-  return {
-    factories,
-    date_headers : dateHeaders,
-    rows         : factoryRows,
-    fetched_at   : wibStr,
-    fetched_epoch: now,
-  }
+  return { factories, date_headers:dateHeaders, rows:factoryRows, fetched_at:wibStr, fetched_epoch:now }
 }
 
 export async function GET(req: NextRequest) {
@@ -149,12 +138,10 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error:"Login diperlukan" }, { status:401 })
 
   const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1"
-
   if (!forceRefresh) {
     const cached = await cacheGet<PlanSEWData>(CACHE_KEY)
     if (cached) return NextResponse.json({ ok:true, data:cached.data })
   }
-
   try {
     const data = await fetchPlanSEW()
     await cacheSet(CACHE_KEY, data, user.username)
