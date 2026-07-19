@@ -52,8 +52,8 @@ export default function DashboardPage() {
   const [planSewLoading,setPlanSewLoading]= useState(false)
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
-  const [shipmentBuyers, setShipmentBuyers] = useState<string[]>([])
-  const [shipmentWeeks,  setShipmentWeeks]  = useState<number[]>([])
+  const [shipmentBuyer,  setShipmentBuyer]  = useState("")
+  const [shipmentWeek,   setShipmentWeek]   = useState("")
   const [jobdescs,       setJobdescs]       = useState<any[]>([])
   const [todoPageLoading,setTodoPageLoading] = useState(false)
   const [aiMsgs,     setAiMsgs]    = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
@@ -1108,78 +1108,26 @@ export default function DashboardPage() {
                   </span>
                 )}
               </span>
-              <div style={{ display:"flex", alignItems:"flex-start", gap:8, flexWrap:"wrap" }}>
-                {/* Multi-select Buyer */}
-                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                  <span style={{ fontSize:9, color:C.tx3, fontWeight:500 }}>
-                    BUYER {shipmentBuyers.length > 0 ? "("+shipmentBuyers.length+" dipilih)" : ""}
-                  </span>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:4, maxWidth:520 }}>
-                    {(shipmentData?.buyers ?? []).map(function(b: string) {
-                      const active = shipmentBuyers.includes(b)
-                      return (
-                        <button key={b}
-                          onClick={function() {
-                            setShipmentBuyers(function(prev: string[]) {
-                              return active ? prev.filter(function(x: string) { return x !== b }) : [...prev, b]
-                            })
-                          }}
-                          style={{ fontSize:9, padding:"2px 8px", borderRadius:20,
-                            border: active ? "none" : "0.5px solid #c8e6c9",
-                            background: active ? "#1a5c2a" : "#fff",
-                            color: active ? "#fff" : C.tx2, cursor:"pointer",
-                            whiteSpace:"nowrap" }}>
-                          {b}
-                        </button>
-                      )
-                    })}
-                    {shipmentBuyers.length > 0 && (
-                      <button onClick={function() { setShipmentBuyers([]) }}
-                        style={{ fontSize:9, padding:"2px 8px", borderRadius:20, border:"0.5px solid #ffcc80", background:"#fff3e0", color:C.org, cursor:"pointer" }}>
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Multi-select Week */}
-                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
-                  <span style={{ fontSize:9, color:C.tx3, fontWeight:500 }}>
-                    WEEK {shipmentWeeks.length > 0 ? "("+shipmentWeeks.length+" dipilih)" : ""}
-                  </span>
-                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                    {(shipmentData?.weeks ?? []).map(function(w: number) {
-                      const active = shipmentWeeks.includes(w)
-                      const wc = (shipmentData?.weeks ?? []).indexOf(w) % 5
-                      const wColors = ["#e8f5e9","#e3f2fd","#fff3e0","#f3e5f5","#e0f7fa"]
-                      return (
-                        <button key={w}
-                          onClick={function() {
-                            setShipmentWeeks(function(prev: number[]) {
-                              return active ? prev.filter(function(x: number) { return x !== w }) : [...prev, w]
-                            })
-                          }}
-                          style={{ fontSize:9, padding:"2px 10px", borderRadius:20,
-                            border: active ? "none" : "0.5px solid #c8e6c9",
-                            background: active ? "#1a5c2a" : wColors[wc % 5],
-                            color: active ? "#fff" : C.gdark, cursor:"pointer",
-                            fontWeight:500 }}>
-                          W{w}
-                        </button>
-                      )
-                    })}
-                    {shipmentWeeks.length > 0 && (
-                      <button onClick={function() { setShipmentWeeks([]) }}
-                        style={{ fontSize:9, padding:"2px 8px", borderRadius:20, border:"0.5px solid #ffcc80", background:"#fff3e0", color:C.org, cursor:"pointer" }}>
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:10, color:C.tx3 }}>Buyer:</span>
+                <select value={shipmentBuyer} onChange={function(e) { setShipmentBuyer(e.target.value) }}
+                  style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.txt, cursor:"pointer", minWidth:180 }}>
+                  <option value="">Semua Buyer</option>
+                  {(shipmentData?.buyers ?? []).map(function(b: string) {
+                    return <option key={b} value={b}>{b}</option>
+                  })}
+                </select>
+                <span style={{ fontSize:10, color:C.tx3 }}>Week:</span>
+                <select value={shipmentWeek} onChange={function(e) { setShipmentWeek(e.target.value) }}
+                  style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.txt, cursor:"pointer" }}>
+                  <option value="">Semua Week</option>
+                  {(shipmentData?.weeks ?? []).map(function(w: number) {
+                    return <option key={w} value={String(w)}>W{w}</option>
+                  })}
+                </select>
                 <button onClick={function() { setShipmentData(null) }}
-                  style={{ fontSize:10, padding:"4px 12px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer", alignSelf:"flex-end" }}>
-                  Refresh Data
+                  style={{ fontSize:10, padding:"3px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                  Refresh
                 </button>
               </div>
             </div>
@@ -1211,8 +1159,8 @@ export default function DashboardPage() {
               })
 
               const filtered = shipmentData.rows.filter(function(r: any) {
-                if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
-                if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
+                if (shipmentBuyer && r.buyer !== shipmentBuyer) return false
+                if (shipmentWeek  && String(r.week) !== shipmentWeek) return false
                 return true
               })
 
