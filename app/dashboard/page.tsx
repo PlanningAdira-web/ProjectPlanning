@@ -1150,7 +1150,7 @@ export default function DashboardPage() {
                   <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
                     {(shipmentData?.weeks ?? []).map(function(w: number) {
                       const active = shipmentWeeks.includes(w)
-                      const wc = allWeeks ? (allWeeks.indexOf(w) % 5) : 0
+                      const wc = (shipmentData?.weeks ?? []).indexOf(w) % 5
                       const wColors = ["#e8f5e9","#e3f2fd","#fff3e0","#f3e5f5","#e0f7fa"]
                       return (
                         <button key={w}
