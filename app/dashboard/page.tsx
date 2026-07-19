@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "todo"|"vis"|"plandst"|"plansew"|"sim"|"ai"
+type Page  = "todo"|"vis"|"plandst"|"plansew"|"shipment"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -50,6 +50,10 @@ export default function DashboardPage() {
   const [planSewData,   setPlanSewData]   = useState<any>(null)
   const [planSewFactory,setPlanSewFactory]= useState("K")
   const [planSewLoading,setPlanSewLoading]= useState(false)
+  const [shipmentData,  setShipmentData]  = useState<any>(null)
+  const [shipmentLoading,setShipmentLoading] = useState(false)
+  const [shipmentBuyer, setShipmentBuyer] = useState("")
+  const [shipmentWeek,  setShipmentWeek]  = useState("")
   const [jobdescs,       setJobdescs]       = useState<any[]>([])
   const [todoPageLoading,setTodoPageLoading] = useState(false)
   const [aiMsgs,     setAiMsgs]    = useState<Msg[]>([{ role:"assistant", content:"Halo! Saya AI Planning Assistant PT Adira Semesta Industry.\n\nSaya terhubung ke Data_Plan_DST, Data Export, dan SPO Stock. Tanya apa saja tentang planning, SPO, material, atau kapasitas." }])
@@ -177,6 +181,17 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setPlanSewLoading(false) })
   }, [page, planSewData])
+
+  useEffect(function() {
+    if (page !== "shipment") return
+    if (shipmentData) return
+    setShipmentLoading(true)
+    fetch("/api/shipment-set")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setShipmentData(d.data) })
+      .catch(function() {})
+      .finally(function() { setShipmentLoading(false) })
+  }, [page, shipmentData])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -828,6 +843,7 @@ export default function DashboardPage() {
           ["vis","Dashboard Planning"],
           ["plandst","Planning Distribusi"],
           ["plansew","Planning Sewing"],
+          ["shipment","Shipment Set"],
           ["sim","Planning Simulation"],
           ["ai","AI Planning Assistant"],
         ] as [Page,string][]).map(function([p,label]) {
@@ -1065,6 +1081,167 @@ export default function DashboardPage() {
               </div>
             </div>
             <PlanSewTable/>
+          </div>
+        )}
+
+        {/* == SHIPMENT SET == */}
+        {page==="shipment" && (
+          <div>
+            {/* Toolbar */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase", flex:1 }}>
+                Shipment Set
+                {shipmentData?.update_info && (
+                  <span style={{ fontWeight:400, marginLeft:8, color:C.org, fontSize:10 }}>
+                    {shipmentData.update_info}
+                  </span>
+                )}
+              </span>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ fontSize:10, color:C.tx3 }}>Buyer:</span>
+                <select
+                  value={shipmentBuyer}
+                  onChange={function(e) { setShipmentBuyer(e.target.value) }}
+                  style={{ fontSize:10, padding:"3px 7px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.txt, cursor:"pointer" }}>
+                  <option value="">Semua Buyer</option>
+                  {(shipmentData?.buyers ?? []).map(function(b: string) {
+                    return <option key={b} value={b}>{b}</option>
+                  })}
+                </select>
+                <span style={{ fontSize:10, color:C.tx3 }}>Week:</span>
+                <select
+                  value={shipmentWeek}
+                  onChange={function(e) { setShipmentWeek(e.target.value) }}
+                  style={{ fontSize:10, padding:"3px 7px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.txt, cursor:"pointer" }}>
+                  <option value="">Semua Week</option>
+                  {(shipmentData?.weeks ?? []).map(function(w: number) {
+                    return <option key={w} value={String(w)}>W{w}</option>
+                  })}
+                </select>
+                <button onClick={function() { setShipmentData(null) }}
+                  style={{ fontSize:10, padding:"3px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {shipmentLoading && (
+              <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+                Memuat data dari sheet Shipment Set...
+              </div>
+            )}
+
+            {!shipmentLoading && !shipmentData && (
+              <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+                Gagal memuat data. Pastikan sheet Shipment Set tersedia.
+              </div>
+            )}
+
+            {!shipmentLoading && shipmentData && (function() {
+              const WEEK_COLORS = [
+                {bg:"#e8f5e9",hl:"#c8e6c9"},
+                {bg:"#e3f2fd",hl:"#bbdefb"},
+                {bg:"#fff3e0",hl:"#ffe0b2"},
+                {bg:"#f3e5f5",hl:"#e1bee7"},
+                {bg:"#e0f7fa",hl:"#b2ebf2"},
+              ]
+              const allWeeks: number[] = shipmentData.weeks
+              const wcMap: Record<number,any> = {}
+              allWeeks.forEach(function(w: number, i: number) {
+                wcMap[w] = WEEK_COLORS[i % WEEK_COLORS.length]
+              })
+
+              const filtered = shipmentData.rows.filter(function(r: any) {
+                if (shipmentBuyer && r.buyer !== shipmentBuyer) return false
+                if (shipmentWeek  && String(r.week) !== shipmentWeek) return false
+                return true
+              })
+
+              const totalQty = filtered.reduce(function(a: number, r: any) { return a + r.qty_shipment }, 0)
+              const totalKK  = filtered.reduce(function(a: number, r: any) { return a + r.kk_dst }, 0)
+
+              const fmtN = function(v: number) {
+                if (!v) return ""
+                const color = v < 0 ? C.red : C.gdark
+                return <span style={{ color, fontWeight:500 }}>{Number(v).toLocaleString("id-ID")}</span>
+              }
+
+              return (
+                <div>
+                  <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 200px)" }}>
+                    <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+                      <thead>
+                        <tr>
+                          {[
+                            {h:"Export",              a:"left",   bg:"#1a5c2a", w:70},
+                            {h:"Week",                a:"center", bg:"#1a5c2a", w:38},
+                            {h:"SPO",                 a:"left",   bg:"#1a5c2a", w:70},
+                            {h:"Style",               a:"left",   bg:"#1a5c2a", w:190},
+                            {h:"Buyer",               a:"left",   bg:"#1a5c2a", w:120},
+                            {h:"Dest. Country",       a:"left",   bg:"#1a5c2a", w:90},
+                            {h:"Qty Shipment / pcs",  a:"right",  bg:"#1a5c2a", w:75},
+                            {h:"Shipped",             a:"right",  bg:"#1a5c2a", w:60},
+                            {h:"KK DST",              a:"right",  bg:"#a32d2d", w:65},
+                            {h:"KK Glove",            a:"right",  bg:"#7b1fa2", w:65},
+                            {h:"Qty Shipment / Date", a:"right",  bg:"#1a5c2a", w:75},
+                            {h:"Kekurangan Env",      a:"right",  bg:"#c62828", w:75},
+                            {h:"Kekurangan Inner",    a:"right",  bg:"#c62828", w:75},
+                            {h:"Kekurangan Carton",   a:"right",  bg:"#c62828", w:75},
+                          ].map(function(col, i) {
+                            return (
+                              <th key={i} style={{
+                                position:"sticky", top:0, zIndex:2,
+                                background:col.bg, color:"#fff",
+                                padding:"5px 7px", fontWeight:500,
+                                whiteSpace:"nowrap", minWidth:col.w,
+                                textAlign:col.a as any,
+                                borderRight:"0.5px solid rgba(255,255,255,.15)",
+                                borderBottom:"1px solid rgba(255,255,255,.2)",
+                              }}>
+                                {col.h}
+                              </th>
+                            )
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(function(r: any, i: number) {
+                          const wc  = wcMap[r.week] ?? WEEK_COLORS[0]
+                          const prev = i > 0 ? filtered[i-1] : null
+                          const weekSep = prev && prev.week !== r.week
+                          return (
+                            <tr key={i} style={{ borderTop: weekSep ? "2px solid #a5d6a7" : "none" }}>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.export_date}</td>
+                              <td style={{ background:wc.hl, padding:"5px 7px", textAlign:"center", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontWeight:500, color:C.gdark, fontSize:10 }}>W{r.week}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", color:C.blue, fontSize:10 }}>{r.spo}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", fontSize:10 }} title={r.style}>{r.style}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.buyer}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.dest_country}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment ? Number(r.qty_shipment).toLocaleString("id-ID") : ""}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.shipped ? Number(r.shipped).toLocaleString("id-ID") : ""}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_dst)}</td>
+                              <td style={{ background:"#e1bee7", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_glove)}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment2 ? Number(r.qty_shipment2).toLocaleString("id-ID") : ""}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_env)}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_inner)}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", fontSize:10 }}>{fmtN(r.kk_carton)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
+                    <span>Total baris: <strong style={{ color:C.txt }}>{filtered.length}</strong></span>
+                    <span>Total Qty: <strong style={{ color:C.gdark }}>{totalQty.toLocaleString("id-ID")}</strong></span>
+                    <span>KK DST: <strong style={{ color:C.red }}>{totalKK.toLocaleString("id-ID")}</strong></span>
+                    <span style={{ marginLeft:"auto" }}>
+                      {shipmentData.fetched_epoch ? "Update: " + ageLabel(shipmentData.fetched_epoch) : ""}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
