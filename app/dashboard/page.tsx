@@ -1494,7 +1494,7 @@ export default function DashboardPage() {
                           })}
                           {dates.map(function(d:string, di:number) {
                             return (
-                              <th key={d} colSpan={5} style={{
+                              <th key={d} colSpan={4} style={{
                                 position:"sticky", top:0, zIndex:2,
                                 background:"#245c2a", color:"#fff",
                                 padding:"4px 6px", fontWeight:500,
@@ -1506,17 +1506,24 @@ export default function DashboardPage() {
                             )
                           })}
                         </tr>
-                        {/* Baris 2: sub-kolom per tanggal */}
+                        {/* Baris 2: sub-kolom per tanggal (4 kolom: Plan Dst, Saldo Kulit, Saldo Synth, Saldo Accs) */}
                         <tr>
-                          {dates.map(function(d:string) {
-                            return ["Plan Dst","Actual Dst","Saldo Kulit","Saldo Synth","Saldo Accs"].map(function(s:string, si:number) {
+                          {dates.map(function(d:string, di:number) {
+                            const isToday = (function() {
+                              const wib = new Date(Date.now() + 7*60*60*1000)
+                              const dd  = String(wib.getDate()).padStart(2,"0")
+                              const mm  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][wib.getMonth()]
+                              return d === dd+"-"+mm || d.startsWith(dd+"-"+mm)
+                            })()
+                            return ["Plan Dst","Saldo Kulit","Saldo Synth","Saldo Accs"].map(function(s:string, si:number) {
                               return (
                                 <th key={d+s} style={{
                                   position:"sticky", top:0, zIndex:1,
-                                  background:"#1a5c2a", color:"#a5d6a7",
+                                  background: isToday ? "#e65100" : "#1a5c2a",
+                                  color: isToday ? "#fff" : "#a5d6a7",
                                   padding:"3px 6px", fontWeight:400, fontSize:9,
-                                  textAlign:"right", whiteSpace:"nowrap", minWidth:54,
-                                  borderRight: si===4 ? "2px solid rgba(255,255,255,.3)" : "0.5px solid rgba(255,255,255,.1)",
+                                  textAlign:"right", whiteSpace:"nowrap", minWidth:56,
+                                  borderRight: si===3 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.1)",
                                   borderBottom:"1px solid rgba(255,255,255,.2)",
                                 }}>{s}</th>
                               )
@@ -1557,16 +1564,27 @@ export default function DashboardPage() {
                               <td style={Object.assign(std(FR[17],17,bg),{textAlign:"right" as const,fontWeight:500,color:C.gdark})}>{fn(row.pcs_in_set)}</td>
                               {dates.map(function(d:string, di:number) {
                                 const dv = row.dates?.[d] ?? {}
-                                return ["plan_dst","actual_dst","saldo_kulit","saldo_synth","saldo_accs"].map(function(k:string, ki:number) {
+                                const isToday = (function() {
+                                  const wib = new Date(Date.now() + 7*60*60*1000)
+                                  const dd  = String(wib.getDate()).padStart(2,"0")
+                                  const mm  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][wib.getMonth()]
+                                  return d === dd+"-"+mm || d.startsWith(dd+"-"+mm)
+                                })()
+                                return ["plan_dst","saldo_kulit","saldo_synth","saldo_accs"].map(function(k:string, ki:number) {
                                   const v = dv[k]
+                                  const n = typeof v==="number" ? v : 0
                                   const isNeg = typeof v==="number" && v<0
+                                  const bgBase = row.is_total ? "#e8f5e9" : (ri%2===0?"#fff":"#f9fafb")
+                                  const bgCell = isToday
+                                    ? (row.is_total ? "#fff3e0" : (ri%2===0?"#fff8f2":"#fff3ec"))
+                                    : bgBase
                                   return (
                                     <td key={d+k} style={{
                                       padding:"4px 6px", fontSize:10, textAlign:"right" as const,
                                       whiteSpace:"nowrap" as const,
-                                      background: row.is_total ? "#e8f5e9" : (ri%2===0?"#fff":"#f9fafb"),
+                                      background: bgCell,
                                       borderBottom:"0.5px solid rgba(0,0,0,.06)",
-                                      borderRight: ki===4 ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
+                                      borderRight: ki===3 ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
                                       color: isNeg ? C.red : "inherit",
                                     }}>
                                       {fn(v)}

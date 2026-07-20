@@ -6,6 +6,13 @@ import { google } from "googleapis"
 export const runtime = "nodejs"
 export const maxDuration = 60
 
+export type MatDateVal = {
+  plan_dst   : number | ""
+  saldo_kulit: number | ""
+  saldo_synth: number | ""
+  saldo_accs : number | ""
+}
+
 export type MaterialRow = {
   spo        : string
   style      : string
@@ -26,13 +33,7 @@ export type MaterialRow = {
   saldo_accs : number | ""
   pcs_in_set : number | ""
   is_total   : boolean
-  dates      : Record<string, {
-    plan_dst   : number | ""
-    actual_dst : number | ""
-    saldo_kulit: number | ""
-    saldo_synth: number | ""
-    saldo_accs : number | ""
-  }>
+  dates      : Record<string, MatDateVal>
 }
 
 export type MaterialData = {
@@ -44,9 +45,11 @@ export type MaterialData = {
   fetched_epoch: number
 }
 
-const CACHE_KEY       = "material_set_data"
-const VALID_FACTS     = new Set(["A","F","K"])
-const DATE_SUB_COLS   = ["Plan Dst","Actual Dst","Saldo Kulit","Saldo Synth","Saldo Accs"]
+const CACHE_KEY   = "material_set_data"
+const VALID_FACTS = new Set(["A","F","K"])
+
+// Sub-kolom yang dicari per tanggal (baris 2)
+const SUB_COLS = ["Plan Dst","Saldo Kulit","Saldo Synth","Saldo Accs"]
 
 function getAuth() {
   return new google.auth.GoogleAuth({
@@ -59,7 +62,7 @@ function getAuth() {
 }
 
 function parseNum(v: any): number | "" {
-  const s = String(v ?? "").trim().replace(/[,\s]/g,"")
+  const s = String(v ?? "").trim().replace(/,/g,"")
   if (!s) return ""
   const n = parseFloat(s)
   return isNaN(n) ? "" : n
@@ -76,92 +79,71 @@ async function fetchMaterialSet(): Promise<MaterialData> {
   })
 
   const raw = res.data.values ?? []
-  if (raw.length < 3) throw new Error("Sheet 'IN Material Produksi' kosong atau tidak ditemukan")
+  if (raw.length < 3) throw new Error("Sheet 'IN Material Produksi' kosong")
 
   // Baris 0 = A1:B1 update info
-  const update_info = String(raw[0]?.[0] ?? "").trim() + " " + String(raw[0]?.[1] ?? "").trim()
+  const update_info = (String(raw[0]?.[0] ?? "") + " " + String(raw[0]?.[1] ?? "")).trim()
 
-  // Baris 1 (index 1) = baris tanggal (S1:HF1) — diabaikan untuk identifikasi tanggal
-  // Kita pakai baris ini untuk ambil tanggal di kolom S ke kanan
+  // Baris 1 (index 1) = tanggal di S1 ke kanan (kolom 18+)
   const dateRow = raw[1] ?? []
 
-  // Baris 2 (index 2) = Header tabel A2:HF2
-  const header = raw[2].map(function(h: any) { return String(h ?? "").trim() })
+  // Baris 2 (index 2) = header kolom (A2:HF2)
+  const header = (raw[2] ?? []).map(function(h: any) { return String(h ?? "").trim() })
 
   // Kolom tetap A-R (index 0-17)
-  const iSPO    = 0   // A
-  const iStyle  = 1   // B
-  const iQty    = 2   // C
-  const iFPRC   = 3   // D
-  const iFact   = 4   // E
-  const iKat    = 5   // F
-  const iUnit   = 6   // G
-  const iKulit  = 7   // H
-  const iSynth  = 8   // I
-  const iAccs   = 9   // J
-  const iPCS    = 10  // K
-  const iTekor  = 11  // L
-  const iCutoff = 12  // M
-  const iSalKul = 13  // N
-  const iSalSyn = 14  // O
-  const iSalSet = 15  // P
-  const iSalAcs = 16  // Q
-  const iPcsIn  = 17  // R
+  const iSPO=0, iStyle=1, iQty=2, iFPRC=3, iFact=4, iKat=5, iUnit=6
+  const iKulit=7, iSynth=8, iAccs=9, iPCS=10, iTekor=11, iCutoff=12
+  const iSalKul=13, iSalSyn=14, iSalSet=15, iSalAcs=16, iPcsIn=17
 
-  // Kolom S (index 18) ke kanan = kolom tanggal berulang
-  // Setiap tanggal punya beberapa sub-kolom, kita ambil yang namanya sesuai DATE_SUB_COLS
-  // Struktur: baris 1 = tanggal, baris 2 = nama sub-kolom
-
+  // Parse kolom tanggal mulai index 18 (kolom S)
+  // Baris 1: tanggal (hanya kolom pertama tiap grup yang berisi, sisanya merge/kosong)
+  // Baris 2: nama sub-kolom (Plan Dst, Saldo Kulit, Saldo Synth, Saldo Accs, ...)
   const dateHeaders: string[] = []
   const dateColMap: Record<string, Record<string, number>> = {}
-  // dateColMap[tanggal][sub-kolom] = index kolom
 
-  let currentDate = ""
+  let curDate = ""
   for (let c = 18; c < header.length; c++) {
-    // Tanggal ada di dateRow (baris index 1), sub-kolom di header (baris index 2)
     const dateVal = String(dateRow[c] ?? "").trim()
-    const subCol  = header[c]
+    const subName = header[c]
 
-    if (dateVal) currentDate = dateVal
+    // Update current date jika ada nilai baru di baris tanggal
+    if (dateVal) curDate = dateVal
 
-    if (!currentDate) continue
-    if (!DATE_SUB_COLS.includes(subCol)) continue
+    if (!curDate) continue
+    if (!SUB_COLS.includes(subName)) continue
 
-    if (!dateColMap[currentDate]) {
-      dateColMap[currentDate] = {}
-      dateHeaders.push(currentDate)
+    if (!dateColMap[curDate]) {
+      dateColMap[curDate] = {}
+      dateHeaders.push(curDate)
     }
-    dateColMap[currentDate][subCol] = c
+    // Hanya simpan kolom pertama jika sub-kolom sama muncul dua kali
+    if (dateColMap[curDate][subName] === undefined) {
+      dateColMap[curDate][subName] = c
+    }
   }
 
-  // Parse data rows — mulai dari baris index 3 (baris ke-4)
+  // Parse data rows mulai baris index 3 (baris ke-4 = baris data pertama)
   const rows: MaterialRow[] = []
-
-  // Baris 2 dan 3 dan 4 (index 2,3,4) = total kumulatif per Fact (A, K, F)
-  // Baris 5+ = data per SPO
 
   for (let r = 3; r < raw.length; r++) {
     const row  = raw[r]
     if (!row || row.length === 0) continue
 
-    const spo  = String(row[iSPO]   ?? "").trim()
-    const fact = String(row[iFact]  ?? "").trim()
+    const spo  = String(row[iSPO]  ?? "").trim()
+    const fact = String(row[iFact] ?? "").trim()
 
     if (!spo) continue
 
-    // Deteksi baris total kumulatif
-    const isTotal = spo.toUpperCase().startsWith("TOTAL") ||
-                    (r <= 5 && (fact === "A" || fact === "F" || fact === "K") && !spo.includes("/"))
+    // Baris total kumulatif: baris 4,5,6 (r=3,4,5) biasanya berisi TOTAL per Fact
+    const isTotal = r <= 5 && VALID_FACTS.has(fact) && !spo.includes("/")
 
-    // Skip baris yang fact-nya tidak valid dan bukan total
     if (!isTotal && !VALID_FACTS.has(fact)) continue
 
     // Parse kolom tanggal
-    const dates: MaterialRow["dates"] = {}
+    const dates: Record<string, MatDateVal> = {}
     for (const [dt, subMap] of Object.entries(dateColMap)) {
       dates[dt] = {
         plan_dst   : parseNum(row[subMap["Plan Dst"]]),
-        actual_dst : parseNum(row[subMap["Actual Dst"]]),
         saldo_kulit: parseNum(row[subMap["Saldo Kulit"]]),
         saldo_synth: parseNum(row[subMap["Saldo Synth"]]),
         saldo_accs : parseNum(row[subMap["Saldo Accs"]]),
@@ -199,7 +181,7 @@ async function fetchMaterialSet(): Promise<MaterialData> {
   const now    = Date.now()
   const wibStr = new Date(now + 7 * 60 * 60 * 1000).toLocaleString("id-ID", { timeZone:"UTC" })
 
-  return { update_info:update_info.trim(), date_headers:dateHeaders, rows, facts, fetched_at:wibStr, fetched_epoch:now }
+  return { update_info, date_headers:dateHeaders, rows, facts, fetched_at:wibStr, fetched_epoch:now }
 }
 
 export async function GET(req: NextRequest) {
