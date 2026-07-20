@@ -1410,18 +1410,29 @@ export default function DashboardPage() {
             {!matSetLoading && matSetData && (function() {
               const dates: string[] = matSetData.date_headers ?? []
 
-              const filtered = (matSetData.rows ?? []).filter(function(r:any) {
-                if (r.is_total) return true
+              const totalRows = (matSetData.rows ?? []).filter(function(r:any) { return r.is_total })
+              const dataRows  = (matSetData.rows ?? []).filter(function(r:any) {
+                if (r.is_total) return false
                 if (matSetFact === "all") return true
                 return r.fact === matSetFact
               })
+              const filtered  = [...totalRows, ...dataRows]
 
               const fn = function(v: number | string | "") {
                 if (v === "" || v === null || v === undefined) return null
-                const n = typeof v === "string" ? parseFloat(String(v).replace(/[,]/g,"")) : v
-                if (!n && n !== 0) return null
+                let n: number
+                if (typeof v === "string") {
+                  const s = v.trim()
+                  if (/^\(.*\)$/.test(s)) {
+                    n = -parseFloat(s.slice(1,-1).replace(/,/g,""))
+                  } else {
+                    n = parseFloat(s.replace(/,/g,""))
+                  }
+                } else { n = v }
+                if (isNaN(n)) return null
+                if (n === 0) return <span style={{color:"var(--text-muted)"}}>0</span>
                 const abs = Math.abs(n).toLocaleString("en-US")
-                if (n < 0) return <span style={{color:C.red}}>({abs})</span>
+                if (n < 0) return <span style={{color:C.red,fontWeight:500}}>({abs})</span>
                 return <span>{abs}</span>
               }
 
@@ -1521,8 +1532,63 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filtered.map(function(row:any, ri:number) {
-                          const bg    = row.is_total ? "#e8f5e9" : (ri%2===0?"#fff":"#f9fafb")
+                        {/* Baris total kumulatif sticky di atas data */}
+                        {totalRows.map(function(row:any, ri:number) {
+                          const bg = "#e8f5e9"
+                          return (
+                            <tr key={"tot-"+ri} style={{ position:"sticky" as const, top:57, zIndex:3 }}>
+                              <td style={Object.assign(std(FR[0],0,bg),{fontWeight:600,fontSize:10,position:"sticky" as const,top:57,zIndex:6})}>{row.spo}</td>
+                              <td style={Object.assign(std(FR[1],1,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[2],2,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.qty_plan)}</td>
+                              <td style={Object.assign(std(FR[3],3,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[4],4,bg),{position:"sticky" as const,top:57,zIndex:6})}>
+                                <span style={{background:"#fff3e0",color:C.org,fontSize:8,padding:"1px 5px",borderRadius:6,fontWeight:500}}>{row.fact}</span>
+                              </td>
+                              <td style={Object.assign(std(FR[5],5,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[6],6,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[7],7,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_kulit)}</td>
+                              <td style={Object.assign(std(FR[8],8,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_synth)}</td>
+                              <td style={Object.assign(std(FR[9],9,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_accs)}</td>
+                              <td style={Object.assign(std(FR[10],10,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.pcs_set)}</td>
+                              <td style={Object.assign(std(FR[11],11,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[12],12,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.cutoff_dst)}</td>
+                              <td style={Object.assign(std(FR[13],13,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_kulit)}</td>
+                              <td style={Object.assign(std(FR[14],14,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_synth)}</td>
+                              <td style={Object.assign(std(FR[15],15,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_set)}</td>
+                              <td style={Object.assign(std(FR[16],16,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_accs)}</td>
+                              <td style={Object.assign(std(FR[17],17,bg),{textAlign:"right" as const,fontWeight:600,color:C.gdark,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.pcs_in_set)}</td>
+                              {dates.map(function(d:string, di:number) {
+                                const dv = row.dates?.[d] ?? {}
+                                const isToday2 = (function() {
+                                  const wib = new Date(Date.now() + 7*60*60*1000)
+                                  const dd  = String(wib.getDate()).padStart(2,"0")
+                                  const mm  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][wib.getMonth()]
+                                  return d === dd+"-"+mm || d.startsWith(dd+"-"+mm)
+                                })()
+                                return ["plan_dst","saldo_kulit","saldo_synth","saldo_accs"].map(function(k:string, ki:number) {
+                                  const v   = dv[k]
+                                  const n2  = typeof v==="number" ? v : 0
+                                  const bgC = isToday2 ? "#fff3e0" : "#e8f5e9"
+                                  return (
+                                    <td key={d+k} style={{
+                                      padding:"4px 6px", fontSize:10, textAlign:"right" as const,
+                                      whiteSpace:"nowrap" as const, fontWeight:600,
+                                      background:bgC, position:"sticky" as const, top:57, zIndex:2,
+                                      borderBottom:"0.5px solid #a5d6a7",
+                                      borderRight: ki===3 ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
+                                      color: n2<0 ? C.red : C.gdark,
+                                    }}>
+                                      {fn(v)}
+                                    </td>
+                                  )
+                                })
+                              })}
+                            </tr>
+                          )
+                        })}
+                        {/* Data rows */}
+                        {dataRows.map(function(row:any, ri:number) {
+                          const bg    = ri%2===0?"#fff":"#f9fafb"
                           const vals  = [
                             {v:row.spo,        fr:FR[0],  extra:{fontWeight:row.is_total?500:400}},
                             {v:row.style,      fr:FR[1],  extra:{maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"}},

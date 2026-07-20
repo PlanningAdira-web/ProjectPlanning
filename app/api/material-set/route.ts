@@ -62,9 +62,14 @@ function getAuth() {
 }
 
 function parseNum(v: any): number | "" {
-  const s = String(v ?? "").trim().replace(/,/g,"")
+  const s = String(v ?? "").trim()
   if (!s) return ""
-  const n = parseFloat(s)
+  // Handle format (angka) = negatif dari Google Sheets
+  if (/^\(.*\)$/.test(s)) {
+    const n = parseFloat(s.slice(1,-1).replace(/,/g,""))
+    return isNaN(n) ? "" : -n
+  }
+  const n = parseFloat(s.replace(/,/g,""))
   return isNaN(n) ? "" : n
 }
 
