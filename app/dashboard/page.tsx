@@ -1514,7 +1514,7 @@ export default function DashboardPage() {
                             return (
                               <th key={d} colSpan={4} style={{
                                 position:"sticky", top:0, zIndex:1,
-                                background: isToday ? "#b34700" : "#245c2a",
+                                background: (function(){const wib=new Date(Date.now()+7*60*60*1000);const dd=String(wib.getDate()).padStart(2,"0");const mm=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][wib.getMonth()];return d===dd+"-"+mm||d.startsWith(dd+"-"+mm)})() ? "#b34700" : "#245c2a",
                                 color:"#fff",
                                 padding:"4px 6px", fontWeight:500,
                                 textAlign:"center", whiteSpace:"nowrap",
