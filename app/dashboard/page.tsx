@@ -55,9 +55,9 @@ export default function DashboardPage() {
   const [matSetData,    setMatSetData]    = useState<any>(null)
   const [matSetLoading, setMatSetLoading] = useState(false)
   const [matSetFact,    setMatSetFact]    = useState("all")
-  const [materialData,  setMaterialData]  = useState<any>(null)
-  const [materialLoading,setMaterialLoading] = useState(false)
-  const [materialFact,  setMaterialFact]  = useState("all")
+  
+  
+  
   const [waSending,     setWaSending]     = useState(false)
   const [waResult,      setWaResult]      = useState<{ok:boolean;msg:string}|null>(null)
   const [shipmentBuyers, setShipmentBuyers] = useState<string[]>([])
@@ -108,7 +108,6 @@ export default function DashboardPage() {
     }).catch(function() {})
     fetch("/api/todo").then(function(r) { return r.json() }).then(function(d) { setTodos(d.items ?? []) }).catch(function() {})
   }, [])
-
 
 
   async function fetchTodoPage(forceRefresh: boolean) {
@@ -231,15 +230,15 @@ export default function DashboardPage() {
   }, [page, matSetData])
 
   useEffect(function() {
-    if (page !== "material") return
-    if (materialData) return
-    setMaterialLoading(true)
+    if (page !== "matset") return
+    if (matSetData) return
+    setMatSetLoading(true)
     fetch("/api/material-set")
       .then(function(r) { return r.json() })
-      .then(function(d) { if (d.ok) setMaterialData(d.data) })
+      .then(function(d) { if (d.ok) setMatSetData(d.data) })
       .catch(function() {})
-      .finally(function() { setMaterialLoading(false) })
-  }, [page, materialData])
+      .finally(function() { setMatSetLoading(false) })
+  }, [page, matSetData])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -1095,7 +1094,6 @@ export default function DashboardPage() {
         {page==="vis" && (
           <div>
 
-
             {/* Toolbar Looker */}
             <div style={{ padding:"8px 0", borderBottom:"0.5px solid #c8e6c9", display:"flex", alignItems:"center", gap:10, marginBottom:0 }}>
               <span style={{ fontSize:13, fontWeight:500, color:C.gdark }}>Dashboard Planning</span>
@@ -1593,6 +1591,221 @@ export default function DashboardPage() {
             })()}
           </div>
         )}
+
+        {/* == MATERIAL SET == */}
+        {page==="matset" && (function() {
+          const SUB = ["Plan Dst","Actual Dst","Saldo Kulit","Saldo Synth","Saldo Accs"]
+          const SUB_KEYS = ["plan_dst","actual_dst","sal_kulit","sal_synth","sal_accs"]
+          const FACTS = ["all","A","F","K"]
+
+          const allRows: any[] = [
+            ...(matSetData?.totals ?? []),
+            ...(matSetData?.rows   ?? []).filter(function(r: any) {
+              return matSetFact === "all" || r.fact === matSetFact
+            })
+          ]
+
+          const dates: string[] = matSetData?.date_headers ?? []
+
+          function fmtN(v: number | string | ""): React.ReactNode {
+            if (v === "" || v === null || v === undefined) return null
+            const n = typeof v === "string" ? parseFloat(v) : v
+            if (isNaN(n) || n === 0) return null
+            const abs = Math.abs(n).toLocaleString("en-US")
+            if (n < 0) return <span style={{ color:C.red }}>({abs})</span>
+            return <span>{abs}</span>
+          }
+
+          // Freeze cols: 18 kolom A-R
+          const FR = [
+            { h:"SPO",              w:68,  l:0,    a:"left"   },
+            { h:"Style",            w:140, l:68,   a:"left"   },
+            { h:"Qty Plan",         w:60,  l:208,  a:"right"  },
+            { h:"Rencana F.Prod",   w:74,  l:268,  a:"left"   },
+            { h:"Fact",             w:36,  l:342,  a:"center" },
+            { h:"Kategori",         w:60,  l:378,  a:"left"   },
+            { h:"Unit",             w:36,  l:438,  a:"center" },
+            { h:"In Kulit",         w:56,  l:474,  a:"right"  },
+            { h:"In Synth",         w:56,  l:530,  a:"right"  },
+            { h:"In Accs",          w:56,  l:586,  a:"right"  },
+            { h:"PCS SET",          w:56,  l:642,  a:"right"  },
+            { h:"Start Tekor",      w:60,  l:698,  a:"left"   },
+            { h:"Cutoff DST",       w:64,  l:758,  a:"right"  },
+            { h:"Saldo IN Kulit",   w:70,  l:822,  a:"right"  },
+            { h:"Saldo IN Synth",   w:70,  l:892,  a:"right"  },
+            { h:"Saldo IN Set Mat", w:76,  l:962,  a:"right"  },
+            { h:"Saldo IN Accs",    w:68,  l:1038, a:"right"  },
+            { h:"PCS IN SET",       w:66,  l:1106, a:"right"  },
+          ] as {h:string;w:number;l:number;a:string}[]
+
+          const LAST_FR = FR.length - 1
+          const frTotalW = FR[LAST_FR].l + FR[LAST_FR].w  // 1172
+
+          if (matSetLoading) return (
+            <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+              Memuat data dari sheet IN Material Produksi...
+            </div>
+          )
+          if (!matSetData) return (
+            <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+              Gagal memuat data. Pastikan sheet "IN Material Produksi" tersedia.
+            </div>
+          )
+
+          return (
+            <div>
+              {/* Toolbar */}
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+                <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase", flex:1 }}>
+                  Material Set - IN Material Produksi
+                  {matSetData.update_info && <span style={{ fontWeight:400, marginLeft:8, color:C.org, fontSize:10 }}>{matSetData.update_info}</span>}
+                </span>
+                <div style={{ display:"flex", gap:4 }}>
+                  {FACTS.map(function(f) {
+                    return (
+                      <button key={f} onClick={function() { setMatSetFact(f) }}
+                        style={{ fontSize:10, padding:"3px 10px", borderRadius:6,
+                          border:"0.5px solid #c8e6c9",
+                          background: matSetFact===f ? C.gdark : "#fff",
+                          color: matSetFact===f ? "#fff" : C.tx2, cursor:"pointer" }}>
+                        {f === "all" ? "Semua" : "Fact " + f}
+                      </button>
+                    )
+                  })}
+                  <button onClick={function() { setMatSetData(null) }}
+                    style={{ fontSize:10, padding:"3px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer", marginLeft:4 }}>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabel */}
+              <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 195px)" }}>
+                <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+                  <thead>
+                    {/* Baris header 1: kolom tetap + tanggal */}
+                    <tr>
+                      {FR.map(function(col, i) {
+                        return (
+                          <th key={i} rowSpan={2} style={{
+                            position:"sticky", top:0, left:col.l, zIndex:10+i,
+                            background: i===LAST_FR ? "#1b4d24" : "#1a5c2a",
+                            color:"#fff", padding:"4px 7px", fontWeight:500,
+                            whiteSpace:"nowrap", minWidth:col.w, textAlign:col.a as any,
+                            borderRight: i===LAST_FR ? "2px solid rgba(255,255,255,.4)" : "0.5px solid rgba(255,255,255,.15)",
+                            borderBottom:"0.5px solid rgba(255,255,255,.2)",
+                            verticalAlign:"bottom",
+                            boxShadow: i===LAST_FR ? "2px 0 4px rgba(0,0,0,.1)" : "none",
+                          }}>{col.h}</th>
+                        )
+                      })}
+                      {dates.map(function(d, di) {
+                        return (
+                          <th key={d} colSpan={5} style={{
+                            position:"sticky", top:0, zIndex:2,
+                            background:"#245c2a", color:"#fff",
+                            padding:"4px 7px", fontWeight:500,
+                            textAlign:"center", whiteSpace:"nowrap",
+                            borderRight:"2px solid rgba(255,255,255,.3)",
+                            borderBottom:"0.5px solid rgba(255,255,255,.2)",
+                          }}>{d}</th>
+                        )
+                      })}
+                    </tr>
+                    {/* Baris header 2: sub-kolom tanggal */}
+                    <tr>
+                      {dates.map(function(d, di) {
+                        return SUB.map(function(sub, si) {
+                          return (
+                            <th key={d+sub} style={{
+                              position:"sticky", top:24, zIndex:2,
+                              background:"#2e7d32", color:"#fff",
+                              padding:"3px 7px", fontSize:9, fontWeight:400,
+                              textAlign:"right", whiteSpace:"nowrap", minWidth:58,
+                              borderRight: si===SUB.length-1 ? "2px solid rgba(255,255,255,.3)" : "0.5px solid rgba(255,255,255,.1)",
+                              borderBottom:"1px solid rgba(255,255,255,.2)",
+                            }}>{sub}</th>
+                          )
+                        })
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allRows.map(function(row: any, ri: number) {
+                      const isTot = row.is_total
+                      const bg    = isTot ? "#e8f5e9" : (ri % 2 === 0 ? "#fff" : "#f9fafb")
+                      const fw    = isTot ? 500 : 400
+
+                      const td = function(col: typeof FR[0], i: number, children: React.ReactNode) {
+                        return (
+                          <td key={i} style={{
+                            position:"sticky", left:col.l, zIndex:3,
+                            background:bg, padding:"4px 7px",
+                            fontWeight:fw, fontSize:10,
+                            textAlign:col.a as any,
+                            whiteSpace:"nowrap",
+                            borderBottom:"0.5px solid #e0ece0",
+                            borderRight: i===LAST_FR ? "2px solid #a5d6a7" : "0.5px solid #c8e6c9",
+                            boxShadow: i===LAST_FR ? "2px 0 4px rgba(0,0,0,.06)" : "none",
+                          }}>{children}</td>
+                        )
+                      }
+
+                      return (
+                        <tr key={ri}>
+                          {td(FR[0],  0,  <span style={{ color: isTot ? C.gdark : C.blue, fontWeight:isTot?500:400 }}>{row.spo}</span>)}
+                          {td(FR[1],  1,  <span style={{ maxWidth:140, display:"block", overflow:"hidden", textOverflow:"ellipsis" }} title={row.style}>{row.style}</span>)}
+                          {td(FR[2],  2,  fmtN(row.qty_plan))}
+                          {td(FR[3],  3,  <span style={{ fontSize:9, color:C.tx2, fontStyle:"italic" }}>{row.fprc}</span>)}
+                          {td(FR[4],  4,  row.fact ? <span style={{ background:"#fff3e0", color:C.org, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>{row.fact}</span> : null)}
+                          {td(FR[5],  5,  row.kategori)}
+                          {td(FR[6],  6,  row.unit)}
+                          {td(FR[7],  7,  fmtN(row.in_kulit))}
+                          {td(FR[8],  8,  fmtN(row.in_synth))}
+                          {td(FR[9],  9,  fmtN(row.in_accs))}
+                          {td(FR[10], 10, fmtN(row.pcs_set))}
+                          {td(FR[11], 11, <span style={{ fontSize:9, color:C.org }}>{row.start_tekor}</span>)}
+                          {td(FR[12], 12, fmtN(row.cutoff_dst))}
+                          {td(FR[13], 13, fmtN(row.sal_kulit))}
+                          {td(FR[14], 14, fmtN(row.sal_synth))}
+                          {td(FR[15], 15, fmtN(row.sal_set))}
+                          {td(FR[16], 16, fmtN(row.sal_accs))}
+                          {td(FR[17], 17, <span style={{ color:C.gdark, fontWeight:500 }}>{fmtN(row.pcs_in_set)}</span>)}
+                          {dates.map(function(d, di) {
+                            const dv = row.dates?.[d] ?? {}
+                            return SUB_KEYS.map(function(sk, si) {
+                              const v   = dv[sk]
+                              const isL = si === SUB_KEYS.length - 1
+                              return (
+                                <td key={d+sk} style={{
+                                  padding:"4px 7px", textAlign:"right",
+                                  background: bg, fontWeight:fw, fontSize:10,
+                                  borderBottom:"0.5px solid #e0ece0",
+                                  borderRight: isL ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
+                                  whiteSpace:"nowrap",
+                                }}>
+                                  {fmtN(v)}
+                                </td>
+                              )
+                            })
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer */}
+              <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+                <span><span style={{ display:"inline-block", width:10, height:10, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:3 }}></span>Baris total kumulatif</span>
+                <span style={{ color:C.red }}>(1,234)</span><span>= angka negatif</span>
+                <span style={{ marginLeft:"auto" }}>Freeze s/d kolom R (PCS IN SET) &bull; Scroll kanan untuk semua tanggal</span>
+                {matSetData?.fetched_epoch && <span>Update: {ageLabel(matSetData.fetched_epoch)}</span>}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* == PLANNING SIMULATION == */}
         {page==="sim" && (
