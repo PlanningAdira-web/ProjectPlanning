@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "todo"|"vis"|"plandst"|"plansew"|"shipment"|"sim"|"ai"
+type Page  = "todo"|"vis"|"plandst"|"plansew"|"shipment"|"matset"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -52,6 +52,14 @@ export default function DashboardPage() {
   const [planSewLoading,setPlanSewLoading]= useState(false)
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
+  const [matSetData,    setMatSetData]    = useState<any>(null)
+  const [matSetLoading, setMatSetLoading] = useState(false)
+  const [matSetFact,    setMatSetFact]    = useState("all")
+  const [materialData,  setMaterialData]  = useState<any>(null)
+  const [materialLoading,setMaterialLoading] = useState(false)
+  const [materialFact,  setMaterialFact]  = useState("all")
+  const [waSending,     setWaSending]     = useState(false)
+  const [waResult,      setWaResult]      = useState<{ok:boolean;msg:string}|null>(null)
   const [shipmentBuyers, setShipmentBuyers] = useState<string[]>([])
   const [shipmentWeeks,  setShipmentWeeks]  = useState<number[]>([])
   const [shipmentBuyerOpen, setShipmentBuyerOpen] = useState(false)
@@ -152,6 +160,22 @@ export default function DashboardPage() {
       .catch(function() {})
   }
 
+  async function sendWaAlert() {
+    if (waSending) return
+    setWaSending(true)
+    setWaResult(null)
+    try {
+      const r = await fetch("/api/send-alert", { method:"POST" })
+      const d = await r.json()
+      setWaResult({ ok:d.ok, msg: d.ok ? d.message : (d.error ?? "Gagal mengirim") })
+    } catch(e: any) {
+      setWaResult({ ok:false, msg:"Network error: " + e.message })
+    } finally {
+      setWaSending(false)
+      setTimeout(function() { setWaResult(null) }, 5000)
+    }
+  }
+
   async function handleToggleJobdesc(id: string, text: string) {
     if (!user || user.role === "viewer") return
     await fetch("/api/jobdesc", {
@@ -194,6 +218,28 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setShipmentLoading(false) })
   }, [page, shipmentData])
+
+  useEffect(function() {
+    if (page !== "matset") return
+    if (matSetData) return
+    setMatSetLoading(true)
+    fetch("/api/material-set")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setMatSetData(d.data) })
+      .catch(function() {})
+      .finally(function() { setMatSetLoading(false) })
+  }, [page, matSetData])
+
+  useEffect(function() {
+    if (page !== "material") return
+    if (materialData) return
+    setMaterialLoading(true)
+    fetch("/api/material-set")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setMaterialData(d.data) })
+      .catch(function() {})
+      .finally(function() { setMaterialLoading(false) })
+  }, [page, materialData])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -857,6 +903,7 @@ export default function DashboardPage() {
           ["plandst","Planning Distribusi"],
           ["plansew","Planning Sewing"],
           ["shipment","Shipment Set"],
+          ["matset","Material Set"],
           ["sim","Planning Simulation"],
           ["ai","AI Planning Assistant"],
         ] as [Page,string][]).map(function([p,label]) {
@@ -901,7 +948,25 @@ export default function DashboardPage() {
                     <span style={{ color:"#ffcc80", fontSize:9, marginLeft:"auto" }}>
                       {todoPageData?.alerts?.length ?? 0} item aktif
                     </span>
+                    {(todoPageData?.alerts?.length ?? 0) > 0 && (perms.canRefreshAI || user?.role==="planning") && (
+                      <button onClick={sendWaAlert} disabled={waSending}
+                        title="Kirim daftar concern ke WhatsApp grup"
+                        style={{ fontSize:9, padding:"2px 9px", borderRadius:10, border:"none",
+                          background: waSending ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.9)",
+                          color:"#e65100", cursor:waSending?"not-allowed":"pointer",
+                          fontWeight:600, display:"flex", alignItems:"center", gap:3, flexShrink:0 }}>
+                        {waSending ? "Mengirim..." : "[WA] Kirim Alert"}
+                      </button>
+                    )}
                   </div>
+                  {waResult && (
+                    <div style={{ padding:"5px 12px", fontSize:10,
+                      background: waResult.ok ? "#e8f5e9" : "#ffebee",
+                      color: waResult.ok ? "#1a5c2a" : "#c62828",
+                      borderBottom:"0.5px solid rgba(0,0,0,.06)" }}>
+                      {waResult.ok ? "[OK] " : "[!] "}{waResult.msg}
+                    </div>
+                  )}
                   <div style={{ overflowY:"auto", maxHeight:420 }}>
                     {!todoPageData ? (
                       <div style={{ padding:12, fontSize:11, color:C.tx3, textAlign:"center" }}>Memuat data alerts...</div>
@@ -1310,6 +1375,218 @@ export default function DashboardPage() {
                     <span style={{ marginLeft:"auto" }}>
                       {shipmentData.fetched_epoch ? "Update: " + ageLabel(shipmentData.fetched_epoch) : ""}
                     </span>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* == MATERIAL SET == */}
+        {page==="matset" && (
+          <div>
+            {/* Toolbar */}
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", flex:1 }}>
+                Material Set
+                {matSetData?.update_info && (
+                  <span style={{ fontWeight:400, marginLeft:8, color:C.org, fontSize:10 }}>
+                    {matSetData.update_info}
+                  </span>
+                )}
+              </span>
+              <div style={{ display:"flex", gap:5 }}>
+                {[{k:"all",l:"Semua"},...(matSetData?.facts??[]).map(function(f:string){return{k:f,l:"Fact "+f}})].map(function(btn:{k:string,l:string}) {
+                  return (
+                    <button key={btn.k} onClick={function(){setMatSetFact(btn.k)}}
+                      style={{ fontSize:10, padding:"3px 10px", borderRadius:6,
+                        border:"0.5px solid #c8e6c9",
+                        background: matSetFact===btn.k ? C.gdark : "#fff",
+                        color: matSetFact===btn.k ? "#fff" : C.tx2, cursor:"pointer" }}>
+                      {btn.l}
+                    </button>
+                  )
+                })}
+                <button onClick={function(){setMatSetData(null)}}
+                  style={{ fontSize:10, padding:"3px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {matSetLoading && (
+              <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+                Memuat data dari sheet IN Material Produksi...
+              </div>
+            )}
+
+            {!matSetLoading && matSetData && (function() {
+              const dates: string[] = matSetData.date_headers ?? []
+
+              const filtered = (matSetData.rows ?? []).filter(function(r:any) {
+                if (r.is_total) return true
+                if (matSetFact === "all") return true
+                return r.fact === matSetFact
+              })
+
+              const fn = function(v: number | string | "") {
+                if (v === "" || v === null || v === undefined) return null
+                const n = typeof v === "string" ? parseFloat(String(v).replace(/[,]/g,"")) : v
+                if (!n && n !== 0) return null
+                const abs = Math.abs(n).toLocaleString("en-US")
+                if (n < 0) return <span style={{color:C.red}}>({abs})</span>
+                return <span>{abs}</span>
+              }
+
+              // Freeze cols positions (kumulatif px)
+              const FR = [
+                {h:"SPO",            w:68,  l:0,    a:"left"},
+                {h:"Style",          w:130, l:68,   a:"left"},
+                {h:"Qty Plan",       w:60,  l:198,  a:"right"},
+                {h:"Rencana F.Prod", w:74,  l:258,  a:"left"},
+                {h:"Fact",           w:36,  l:332,  a:"center"},
+                {h:"Kategori",       w:56,  l:368,  a:"left"},
+                {h:"Unit",           w:36,  l:424,  a:"center"},
+                {h:"In Kulit",       w:58,  l:460,  a:"right"},
+                {h:"In Synth",       w:58,  l:518,  a:"right"},
+                {h:"In Accs",        w:58,  l:576,  a:"right"},
+                {h:"PCS SET",        w:58,  l:634,  a:"right"},
+                {h:"Start Tekor",    w:60,  l:692,  a:"left"},
+                {h:"Cutoff DST",     w:66,  l:752,  a:"right"},
+                {h:"Saldo IN Kulit", w:70,  l:818,  a:"right"},
+                {h:"Saldo IN Synth", w:70,  l:888,  a:"right"},
+                {h:"Saldo IN Set",   w:70,  l:958,  a:"right"},
+                {h:"Saldo IN Accs",  w:68,  l:1028, a:"right"},
+                {h:"PCS IN SET",     w:66,  l:1096, a:"right"},
+              ] as {h:string;w:number;l:number;a:string}[]
+
+              const sth = function(col:{h:string;w:number;l:number;a:string}, i:number) {
+                return {
+                  position:"sticky" as const, top:0, left:col.l, zIndex:12+i,
+                  background: i===17 ? "#1b4d24" : "#1a5c2a",
+                  color:"#fff", padding:"4px 6px", fontWeight:500,
+                  whiteSpace:"nowrap" as const, minWidth:col.w, textAlign:col.a as any,
+                  borderRight: i===17 ? "2px solid rgba(255,255,255,.4)" : "0.5px solid rgba(255,255,255,.15)",
+                  borderBottom:"1px solid rgba(255,255,255,.2)",
+                  boxShadow: i===17 ? "2px 0 4px rgba(0,0,0,.12)" : "none",
+                }
+              }
+
+              const std = function(col:{h:string;w:number;l:number;a:string}, i:number, bg:string) {
+                return {
+                  position:"sticky" as const, left:col.l, zIndex:5,
+                  background:bg, padding:"4px 6px",
+                  borderBottom:"0.5px solid rgba(0,0,0,.06)",
+                  borderRight: i===17 ? "2px solid #a5d6a7" : "0.5px solid rgba(180,220,180,.2)",
+                  boxShadow: i===17 ? "2px 0 4px rgba(0,0,0,.06)" : "none",
+                  whiteSpace:"nowrap" as const, minWidth:col.w, textAlign:col.a as any,
+                  fontSize:10,
+                }
+              }
+
+              return (
+                <div>
+                  <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 195px)" }}>
+                    <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+                      <thead>
+                        {/* Baris 1: freeze labels + tanggal */}
+                        <tr>
+                          {FR.map(function(col,i) {
+                            return <th key={i} rowSpan={2} style={sth(col,i)}>{col.h}</th>
+                          })}
+                          {dates.map(function(d:string, di:number) {
+                            return (
+                              <th key={d} colSpan={5} style={{
+                                position:"sticky", top:0, zIndex:2,
+                                background:"#245c2a", color:"#fff",
+                                padding:"4px 6px", fontWeight:500,
+                                textAlign:"center", whiteSpace:"nowrap",
+                                borderRight:"2px solid rgba(255,255,255,.3)",
+                                borderBottom:"0.5px solid rgba(255,255,255,.2)",
+                                minWidth:270,
+                              }}>{d}</th>
+                            )
+                          })}
+                        </tr>
+                        {/* Baris 2: sub-kolom per tanggal */}
+                        <tr>
+                          {dates.map(function(d:string) {
+                            return ["Plan Dst","Actual Dst","Saldo Kulit","Saldo Synth","Saldo Accs"].map(function(s:string, si:number) {
+                              return (
+                                <th key={d+s} style={{
+                                  position:"sticky", top:0, zIndex:1,
+                                  background:"#1a5c2a", color:"#a5d6a7",
+                                  padding:"3px 6px", fontWeight:400, fontSize:9,
+                                  textAlign:"right", whiteSpace:"nowrap", minWidth:54,
+                                  borderRight: si===4 ? "2px solid rgba(255,255,255,.3)" : "0.5px solid rgba(255,255,255,.1)",
+                                  borderBottom:"1px solid rgba(255,255,255,.2)",
+                                }}>{s}</th>
+                              )
+                            })
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(function(row:any, ri:number) {
+                          const bg    = row.is_total ? "#e8f5e9" : (ri%2===0?"#fff":"#f9fafb")
+                          const vals  = [
+                            {v:row.spo,        fr:FR[0],  extra:{fontWeight:row.is_total?500:400}},
+                            {v:row.style,      fr:FR[1],  extra:{maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"}},
+                            {v:fn(row.qty_plan),fr:FR[2], extra:{}},
+                            {v:row.fprc,       fr:FR[3],  extra:{fontSize:9,fontStyle:"italic",color:C.tx2}},
+                          ]
+                          return (
+                            <tr key={ri}>
+                              <td style={Object.assign(std(FR[0],0,bg),{fontWeight:row.is_total?500:400})} title={row.spo}>{row.spo}</td>
+                              <td style={Object.assign(std(FR[1],1,bg),{maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"})} title={row.style}>{row.style}</td>
+                              <td style={Object.assign(std(FR[2],2,bg),{textAlign:"right" as const})}>{fn(row.qty_plan)}</td>
+                              <td style={Object.assign(std(FR[3],3,bg),{fontSize:9,fontStyle:"italic",color:C.tx2})}>{row.fprc}</td>
+                              <td style={std(FR[4],4,bg)}>
+                                {row.fact && <span style={{background:"#fff3e0",color:C.org,fontSize:8,padding:"1px 5px",borderRadius:6,fontWeight:500}}>{row.fact}</span>}
+                              </td>
+                              <td style={std(FR[5],5,bg)}>{row.kategori}</td>
+                              <td style={std(FR[6],6,bg)}>{row.unit}</td>
+                              <td style={Object.assign(std(FR[7],7,bg),{textAlign:"right" as const})}>{fn(row.in_kulit)}</td>
+                              <td style={Object.assign(std(FR[8],8,bg),{textAlign:"right" as const})}>{fn(row.in_synth)}</td>
+                              <td style={Object.assign(std(FR[9],9,bg),{textAlign:"right" as const})}>{fn(row.in_accs)}</td>
+                              <td style={Object.assign(std(FR[10],10,bg),{textAlign:"right" as const})}>{fn(row.pcs_set)}</td>
+                              <td style={Object.assign(std(FR[11],11,bg),{fontSize:9,color:C.org})}>{row.start_tekor}</td>
+                              <td style={Object.assign(std(FR[12],12,bg),{textAlign:"right" as const})}>{fn(row.cutoff_dst)}</td>
+                              <td style={Object.assign(std(FR[13],13,bg),{textAlign:"right" as const})}>{fn(row.saldo_kulit)}</td>
+                              <td style={Object.assign(std(FR[14],14,bg),{textAlign:"right" as const})}>{fn(row.saldo_synth)}</td>
+                              <td style={Object.assign(std(FR[15],15,bg),{textAlign:"right" as const})}>{fn(row.saldo_set)}</td>
+                              <td style={Object.assign(std(FR[16],16,bg),{textAlign:"right" as const})}>{fn(row.saldo_accs)}</td>
+                              <td style={Object.assign(std(FR[17],17,bg),{textAlign:"right" as const,fontWeight:500,color:C.gdark})}>{fn(row.pcs_in_set)}</td>
+                              {dates.map(function(d:string, di:number) {
+                                const dv = row.dates?.[d] ?? {}
+                                return ["plan_dst","actual_dst","saldo_kulit","saldo_synth","saldo_accs"].map(function(k:string, ki:number) {
+                                  const v = dv[k]
+                                  const isNeg = typeof v==="number" && v<0
+                                  return (
+                                    <td key={d+k} style={{
+                                      padding:"4px 6px", fontSize:10, textAlign:"right" as const,
+                                      whiteSpace:"nowrap" as const,
+                                      background: row.is_total ? "#e8f5e9" : (ri%2===0?"#fff":"#f9fafb"),
+                                      borderBottom:"0.5px solid rgba(0,0,0,.06)",
+                                      borderRight: ki===4 ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
+                                      color: isNeg ? C.red : "inherit",
+                                    }}>
+                                      {fn(v)}
+                                    </td>
+                                  )
+                                })
+                              })}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap" }}>
+                    <span><span style={{display:"inline-block",width:10,height:10,background:"#e8f5e9",border:"0.5px solid #a5d6a7",borderRadius:2,verticalAlign:"middle",marginRight:3}}></span>Baris total kumulatif Fact</span>
+                    <span style={{color:C.red}}>({"{"}angka{"}"})&nbsp;</span><span>= negatif</span>
+                    <span style={{marginLeft:"auto"}}>Freeze s/d kolom R (PCS IN SET) &bull; Scroll kanan untuk semua tanggal</span>
+                    {matSetData.fetched_epoch && <span>Update: {ageLabel(matSetData.fetched_epoch)}</span>}
                   </div>
                 </div>
               )
