@@ -84,11 +84,40 @@ async function fetchMaterialSet(): Promise<MaterialData> {
   // Baris 0 = A1:B1 update info
   const update_info = (String(raw[0]?.[0] ?? "") + " " + String(raw[0]?.[1] ?? "")).trim()
 
-  // Baris 1 (index 1) = tanggal di S1 ke kanan (kolom 18+)
-  const dateRow = raw[1] ?? []
+  // Deteksi baris yang berisi tanggal (S1 ke kanan) dan baris header A2:R2
+  // Strategi: scan baris 0-3, cari baris yang mengandung "Plan Dst" di kolom 18+
+  // dan baris yang mengandung "SPO" di kolom 0
 
-  // Baris 2 (index 2) = header kolom (A2:HF2)
-  const header = (raw[2] ?? []).map(function(h: any) { return String(h ?? "").trim() })
+  let dateRowIdx  = -1  // baris tanggal (S1)
+  let subRowIdx   = -1  // baris sub-kolom (Plan Dst, Saldo Kulit, dll)
+  let headerRowIdx = -1 // baris header A-R (SPO, Style, dll)
+
+  for (let i = 0; i < Math.min(4, raw.length); i++) {
+    const row = raw[i] ?? []
+    const col0 = String(row[0] ?? "").trim().toLowerCase()
+    const col18 = String(row[18] ?? "").trim().toLowerCase()
+    // Baris dengan SPO di kolom A = header utama
+    if (col0 === "spo" && headerRowIdx < 0) { headerRowIdx = i; continue }
+    // Baris dengan "plan dst" di kolom 18+ = baris sub-kolom
+    const hasPlanDst = row.slice(18).some(function(c: any) {
+      return String(c ?? "").trim().toLowerCase() === "plan dst"
+    })
+    if (hasPlanDst && subRowIdx < 0) { subRowIdx = i; continue }
+    // Baris dengan tanggal di kolom 18+ (format DD-Mon)
+    const hasDates = row.slice(18).some(function(c: any) {
+      return /^\d{1,2}-[A-Za-z]{3}/.test(String(c ?? "").trim())
+    })
+    if (hasDates && dateRowIdx < 0) { dateRowIdx = i }
+  }
+
+  // Fallback ke posisi default jika tidak terdeteksi
+  if (dateRowIdx  < 0) dateRowIdx  = 0  // baris 1 = tanggal di S
+  if (subRowIdx   < 0) subRowIdx   = 1  // baris 2 = sub-kolom
+  if (headerRowIdx < 0) headerRowIdx = 2 // baris 3 = header A-R
+
+  const dateRow = raw[dateRowIdx]  ?? []
+  const subRow  = raw[subRowIdx]   ?? []
+  const header  = (raw[headerRowIdx] ?? []).map(function(h: any) { return String(h ?? "").trim() })
 
   // Kolom tetap A-R (index 0-17)
   const iSPO=0, iStyle=1, iQty=2, iFPRC=3, iFact=4, iKat=5, iUnit=6
@@ -102,9 +131,10 @@ async function fetchMaterialSet(): Promise<MaterialData> {
   const dateColMap: Record<string, Record<string, number>> = {}
 
   let curDate = ""
-  for (let c = 18; c < header.length; c++) {
+  const maxCols = Math.max(header.length, dateRow.length, subRow.length)
+  for (let c = 18; c < maxCols; c++) {
     const dateVal = String(dateRow[c] ?? "").trim()
-    const subName = header[c]
+    const subName = String(subRow[c]  ?? "").trim()  // sub-kolom dari subRow
 
     // Update current date jika ada nilai baru di baris tanggal
     if (dateVal) curDate = dateVal
