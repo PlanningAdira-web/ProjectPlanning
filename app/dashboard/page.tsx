@@ -1437,71 +1437,90 @@ export default function DashboardPage() {
               }
 
               // Freeze cols positions (kumulatif px)
+              // Freeze hanya sampai kolom L (Start Tekor = index 11)
+              // Kolom M+ (Cutoff DST, Saldo dll) scroll bebas
               const FR = [
-                {h:"SPO",            w:68,  l:0,    a:"left"},
-                {h:"Style",          w:130, l:68,   a:"left"},
-                {h:"Qty Plan",       w:60,  l:198,  a:"right"},
-                {h:"Rencana F.Prod", w:74,  l:258,  a:"left"},
-                {h:"Fact",           w:36,  l:332,  a:"center"},
-                {h:"Kategori",       w:56,  l:368,  a:"left"},
-                {h:"Unit",           w:36,  l:424,  a:"center"},
-                {h:"In Kulit",       w:58,  l:460,  a:"right"},
-                {h:"In Synth",       w:58,  l:518,  a:"right"},
-                {h:"In Accs",        w:58,  l:576,  a:"right"},
-                {h:"PCS SET",        w:58,  l:634,  a:"right"},
-                {h:"Start Tekor",    w:60,  l:692,  a:"left"},
-                {h:"Cutoff DST",     w:66,  l:752,  a:"right"},
-                {h:"Saldo IN Kulit", w:70,  l:818,  a:"right"},
-                {h:"Saldo IN Synth", w:70,  l:888,  a:"right"},
-                {h:"Saldo IN Set",   w:70,  l:958,  a:"right"},
-                {h:"Saldo IN Accs",  w:68,  l:1028, a:"right"},
-                {h:"PCS IN SET",     w:66,  l:1096, a:"right"},
-              ] as {h:string;w:number;l:number;a:string}[]
+                {h:"SPO",         w:68,  l:0,   a:"left",   fr:true},
+                {h:"Style",       w:130, l:68,  a:"left",   fr:true},
+                {h:"Qty Plan",    w:60,  l:198, a:"right",  fr:true},
+                {h:"Rencana F.P", w:70,  l:258, a:"left",   fr:true},
+                {h:"Fact",        w:36,  l:328, a:"center", fr:true},
+                {h:"Kategori",    w:56,  l:364, a:"left",   fr:true},
+                {h:"Unit",        w:36,  l:420, a:"center", fr:true},
+                {h:"In Kulit",    w:58,  l:456, a:"right",  fr:true, bg:"#1a6b1a"},
+                {h:"In Synth",    w:58,  l:514, a:"right",  fr:true, bg:"#1a6b1a"},
+                {h:"In Accs",     w:58,  l:572, a:"right",  fr:true, bg:"#7b5e00"},
+                {h:"PCS SET",     w:58,  l:630, a:"right",  fr:true, bg:"#7b5e00"},
+                {h:"Start Tekor", w:62,  l:688, a:"left",   fr:true, sep:true},
+                {h:"Cutoff DST",  w:68,  l:0,   a:"right",  fr:false},
+                {h:"Saldo IN Kulit",  w:72, l:0, a:"right", fr:false},
+                {h:"Saldo IN Synth",  w:72, l:0, a:"right", fr:false},
+                {h:"Saldo IN Set Mat",w:78, l:0, a:"right", fr:false},
+                {h:"Saldo IN Accs",   w:70, l:0, a:"right", fr:false},
+                {h:"PCS IN SET",      w:68, l:0, a:"right", fr:false},
+              ] as {h:string;w:number;l:number;a:string;fr:boolean;bg?:string;sep?:boolean}[]
 
-              const sth = function(col:{h:string;w:number;l:number;a:string}, i:number) {
-                return {
-                  position:"sticky" as const, top:0, left:col.l, zIndex:12+i,
-                  background: i===17 ? "#1b4d24" : "#1a5c2a",
-                  color:"#fff", padding:"4px 6px", fontWeight:500,
+              const freezeCols = FR.filter(function(c) { return c.fr })
+              const scrollCols = FR.filter(function(c) { return !c.fr })
+
+              const sth = function(col:any, i:number, isFr:boolean) {
+                const isSep = col.sep === true
+                const hdrBg = col.bg ?? "#1a5c2a"
+                const base: any = {
+                  top:0, zIndex: isFr ? 12+i : 2,
+                  background: hdrBg, color:"#fff",
+                  padding:"4px 6px", fontWeight:500,
                   whiteSpace:"nowrap" as const, minWidth:col.w, textAlign:col.a as any,
-                  borderRight: i===17 ? "2px solid rgba(255,255,255,.4)" : "0.5px solid rgba(255,255,255,.15)",
+                  borderRight: isSep ? "3px solid rgba(255,255,255,.5)" : "0.5px solid rgba(255,255,255,.15)",
                   borderBottom:"1px solid rgba(255,255,255,.2)",
-                  boxShadow: i===17 ? "2px 0 4px rgba(0,0,0,.12)" : "none",
+                  boxShadow: isSep ? "2px 0 4px rgba(0,0,0,.15)" : "none",
                 }
+                if (isFr) { base.position = "sticky" as const; base.left = col.l }
+                else { base.position = "sticky" as const }
+                return base
               }
 
-              const std = function(col:{h:string;w:number;l:number;a:string}, i:number, bg:string) {
-                return {
-                  position:"sticky" as const, left:col.l, zIndex:5,
+              const std = function(col:any, i:number, bg:string, isFr:boolean) {
+                const isSep = col.sep === true
+                const base: any = {
+                  zIndex: isFr ? 5 : 0,
                   background:bg, padding:"4px 6px",
                   borderBottom:"0.5px solid rgba(0,0,0,.06)",
-                  borderRight: i===17 ? "2px solid #a5d6a7" : "0.5px solid rgba(180,220,180,.2)",
-                  boxShadow: i===17 ? "2px 0 4px rgba(0,0,0,.06)" : "none",
+                  borderRight: isSep ? "3px solid #a5d6a7" : "0.5px solid rgba(180,220,180,.2)",
+                  boxShadow: isSep ? "2px 0 4px rgba(0,0,0,.06)" : "none",
                   whiteSpace:"nowrap" as const, minWidth:col.w, textAlign:col.a as any,
                   fontSize:10,
                 }
+                if (isFr) { base.position = "sticky" as const; base.left = col.l }
+                return base
               }
+
+              // Warna header per kolom scroll (Cutoff DST, Saldo dll)
+              const SCROLL_HEADER_BG = ["#5c3d00","#1a4d1a","#1a4d1a","#1a3d5c","#1a4d1a","#1a3d1a"]
 
               return (
                 <div>
                   <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 195px)" }}>
                     <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
                       <thead>
-                        {/* Baris 1: freeze labels + tanggal */}
+                        {/* Baris 1: freeze cols + scroll cols + tanggal */}
                         <tr>
                           {FR.map(function(col,i) {
-                            return <th key={i} rowSpan={2} style={sth(col,i)}>{col.h}</th>
+                            return <th key={i} rowSpan={2} style={Object.assign(sth(col,i,col.fr),
+                              col.fr ? {} : {background: SCROLL_HEADER_BG[i-freezeCols.length] ?? "#1a5c2a"}
+                            )}>{col.h}</th>
                           })}
                           {dates.map(function(d:string, di:number) {
                             return (
                               <th key={d} colSpan={4} style={{
-                                position:"sticky", top:0, zIndex:2,
-                                background:"#245c2a", color:"#fff",
+                                position:"sticky", top:0, zIndex:1,
+                                background: isToday ? "#b34700" : "#245c2a",
+                                color:"#fff",
                                 padding:"4px 6px", fontWeight:500,
                                 textAlign:"center", whiteSpace:"nowrap",
                                 borderRight:"2px solid rgba(255,255,255,.3)",
                                 borderBottom:"0.5px solid rgba(255,255,255,.2)",
-                                minWidth:270,
+                                minWidth:220,
                               }}>{d}</th>
                             )
                           })}
@@ -1537,26 +1556,26 @@ export default function DashboardPage() {
                           const bg = "#e8f5e9"
                           return (
                             <tr key={"tot-"+ri} style={{ position:"sticky" as const, top:57, zIndex:3 }}>
-                              <td style={Object.assign(std(FR[0],0,bg),{fontWeight:600,fontSize:10,position:"sticky" as const,top:57,zIndex:6})}>{row.spo}</td>
-                              <td style={Object.assign(std(FR[1],1,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
-                              <td style={Object.assign(std(FR[2],2,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.qty_plan)}</td>
-                              <td style={Object.assign(std(FR[3],3,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
-                              <td style={Object.assign(std(FR[4],4,bg),{position:"sticky" as const,top:57,zIndex:6})}>
+                              <td style={Object.assign(std(FR[0],0,bg,FR[0].fr),{fontWeight:600,fontSize:10,position:"sticky" as const,top:57,zIndex:6})}>{row.spo}</td>
+                              <td style={Object.assign(std(FR[1],1,bg,FR[1].fr),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[2],2,bg,FR[2].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.qty_plan)}</td>
+                              <td style={Object.assign(std(FR[3],3,bg,FR[3].fr),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[4],4,bg,FR[4].fr),{position:"sticky" as const,top:57,zIndex:6})}>
                                 <span style={{background:"#fff3e0",color:C.org,fontSize:8,padding:"1px 5px",borderRadius:6,fontWeight:500}}>{row.fact}</span>
                               </td>
-                              <td style={Object.assign(std(FR[5],5,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
-                              <td style={Object.assign(std(FR[6],6,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
-                              <td style={Object.assign(std(FR[7],7,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_kulit)}</td>
-                              <td style={Object.assign(std(FR[8],8,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_synth)}</td>
-                              <td style={Object.assign(std(FR[9],9,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_accs)}</td>
-                              <td style={Object.assign(std(FR[10],10,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.pcs_set)}</td>
-                              <td style={Object.assign(std(FR[11],11,bg),{position:"sticky" as const,top:57,zIndex:6})}></td>
-                              <td style={Object.assign(std(FR[12],12,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.cutoff_dst)}</td>
-                              <td style={Object.assign(std(FR[13],13,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_kulit)}</td>
-                              <td style={Object.assign(std(FR[14],14,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_synth)}</td>
-                              <td style={Object.assign(std(FR[15],15,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_set)}</td>
-                              <td style={Object.assign(std(FR[16],16,bg),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_accs)}</td>
-                              <td style={Object.assign(std(FR[17],17,bg),{textAlign:"right" as const,fontWeight:600,color:C.gdark,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.pcs_in_set)}</td>
+                              <td style={Object.assign(std(FR[5],5,bg,FR[5].fr),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[6],6,bg,FR[6].fr),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[7],7,bg,FR[7].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_kulit)}</td>
+                              <td style={Object.assign(std(FR[8],8,bg,FR[8].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_synth)}</td>
+                              <td style={Object.assign(std(FR[9],9,bg,FR[9].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.in_accs)}</td>
+                              <td style={Object.assign(std(FR[10],10,bg,FR[10].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.pcs_set)}</td>
+                              <td style={Object.assign(std(FR[11],11,bg,FR[11].fr),{position:"sticky" as const,top:57,zIndex:6})}></td>
+                              <td style={Object.assign(std(FR[12],12,bg,FR[12].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.cutoff_dst)}</td>
+                              <td style={Object.assign(std(FR[13],13,bg,FR[13].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_kulit)}</td>
+                              <td style={Object.assign(std(FR[14],14,bg,FR[14].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_synth)}</td>
+                              <td style={Object.assign(std(FR[15],15,bg,FR[15].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_set)}</td>
+                              <td style={Object.assign(std(FR[16],16,bg,FR[16].fr),{textAlign:"right" as const,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.saldo_accs)}</td>
+                              <td style={Object.assign(std(FR[17],17,bg,FR[17].fr),{textAlign:"right" as const,fontWeight:600,color:C.gdark,position:"sticky" as const,top:57,zIndex:6})}>{fn(row.pcs_in_set)}</td>
                               {dates.map(function(d:string, di:number) {
                                 const dv = row.dates?.[d] ?? {}
                                 const isToday2 = (function() {
@@ -1586,61 +1605,54 @@ export default function DashboardPage() {
                             </tr>
                           )
                         })}
-                        {/* Data rows */}
+                                                {/* Data rows */}
                         {dataRows.map(function(row:any, ri:number) {
-                          const bg    = ri%2===0?"#fff":"#f9fafb"
-                          const vals  = [
-                            {v:row.spo,        fr:FR[0],  extra:{fontWeight:row.is_total?500:400}},
-                            {v:row.style,      fr:FR[1],  extra:{maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"}},
-                            {v:fn(row.qty_plan),fr:FR[2], extra:{}},
-                            {v:row.fprc,       fr:FR[3],  extra:{fontSize:9,fontStyle:"italic",color:C.tx2}},
-                          ]
+                          const bg = ri%2===0?"#fff":"#f9fafb"
                           return (
                             <tr key={ri}>
-                              <td style={Object.assign(std(FR[0],0,bg),{fontWeight:row.is_total?500:400})} title={row.spo}>{row.spo}</td>
-                              <td style={Object.assign(std(FR[1],1,bg),{maxWidth:130,overflow:"hidden",textOverflow:"ellipsis"})} title={row.style}>{row.style}</td>
-                              <td style={Object.assign(std(FR[2],2,bg),{textAlign:"right" as const})}>{fn(row.qty_plan)}</td>
-                              <td style={Object.assign(std(FR[3],3,bg),{fontSize:9,fontStyle:"italic",color:C.tx2})}>{row.fprc}</td>
-                              <td style={std(FR[4],4,bg)}>
-                                {row.fact && <span style={{background:"#fff3e0",color:C.org,fontSize:8,padding:"1px 5px",borderRadius:6,fontWeight:500}}>{row.fact}</span>}
-                              </td>
-                              <td style={std(FR[5],5,bg)}>{row.kategori}</td>
-                              <td style={std(FR[6],6,bg)}>{row.unit}</td>
-                              <td style={Object.assign(std(FR[7],7,bg),{textAlign:"right" as const})}>{fn(row.in_kulit)}</td>
-                              <td style={Object.assign(std(FR[8],8,bg),{textAlign:"right" as const})}>{fn(row.in_synth)}</td>
-                              <td style={Object.assign(std(FR[9],9,bg),{textAlign:"right" as const})}>{fn(row.in_accs)}</td>
-                              <td style={Object.assign(std(FR[10],10,bg),{textAlign:"right" as const})}>{fn(row.pcs_set)}</td>
-                              <td style={Object.assign(std(FR[11],11,bg),{fontSize:9,color:C.org})}>{row.start_tekor}</td>
-                              <td style={Object.assign(std(FR[12],12,bg),{textAlign:"right" as const})}>{fn(row.cutoff_dst)}</td>
-                              <td style={Object.assign(std(FR[13],13,bg),{textAlign:"right" as const})}>{fn(row.saldo_kulit)}</td>
-                              <td style={Object.assign(std(FR[14],14,bg),{textAlign:"right" as const})}>{fn(row.saldo_synth)}</td>
-                              <td style={Object.assign(std(FR[15],15,bg),{textAlign:"right" as const})}>{fn(row.saldo_set)}</td>
-                              <td style={Object.assign(std(FR[16],16,bg),{textAlign:"right" as const})}>{fn(row.saldo_accs)}</td>
-                              <td style={Object.assign(std(FR[17],17,bg),{textAlign:"right" as const,fontWeight:500,color:C.gdark})}>{fn(row.pcs_in_set)}</td>
-                              {dates.map(function(d:string, di:number) {
+                              {FR.map(function(col:any, ci:number) {
+                                const style = Object.assign(std(col, ci, bg, col.fr), {textAlign: col.a as any})
+                                let cell: React.ReactNode = null
+                                if      (ci===0)  cell = <span style={{color:C.blue}}>{row.spo}</span>
+                                else if (ci===1)  cell = <span title={row.style}>{row.style.length>18?row.style.slice(0,18)+"...":row.style}</span>
+                                else if (ci===2)  cell = fn(row.qty_plan)
+                                else if (ci===3)  cell = <span style={{fontSize:9,fontStyle:"italic",color:C.tx2}}>{row.fprc}</span>
+                                else if (ci===4)  cell = row.fact ? <span style={{background:"#fff3e0",color:C.org,fontSize:8,padding:"1px 5px",borderRadius:6,fontWeight:500}}>{row.fact}</span> : null
+                                else if (ci===5)  cell = row.kategori
+                                else if (ci===6)  cell = row.unit
+                                else if (ci===7)  cell = fn(row.in_kulit)
+                                else if (ci===8)  cell = fn(row.in_synth)
+                                else if (ci===9)  cell = fn(row.in_accs)
+                                else if (ci===10) cell = fn(row.pcs_set)
+                                else if (ci===11) cell = <span style={{fontSize:9,color:C.org}}>{row.start_tekor}</span>
+                                else if (ci===12) cell = fn(row.cutoff_dst)
+                                else if (ci===13) cell = fn(row.saldo_kulit)
+                                else if (ci===14) cell = fn(row.saldo_synth)
+                                else if (ci===15) cell = fn(row.saldo_set)
+                                else if (ci===16) cell = fn(row.saldo_accs)
+                                else if (ci===17) cell = <span style={{fontWeight:500,color:C.gdark}}>{fn(row.pcs_in_set)}</span>
+                                return <td key={ci} style={style}>{cell}</td>
+                              })}
+                              {dates.map(function(d:string) {
                                 const dv = row.dates?.[d] ?? {}
-                                const isToday = (function() {
+                                const isToday3 = (function() {
                                   const wib = new Date(Date.now() + 7*60*60*1000)
                                   const dd  = String(wib.getDate()).padStart(2,"0")
                                   const mm  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][wib.getMonth()]
                                   return d === dd+"-"+mm || d.startsWith(dd+"-"+mm)
                                 })()
                                 return ["plan_dst","saldo_kulit","saldo_synth","saldo_accs"].map(function(k:string, ki:number) {
-                                  const v = dv[k]
-                                  const n = typeof v==="number" ? v : 0
-                                  const isNeg = typeof v==="number" && v<0
-                                  const bgBase = row.is_total ? "#e8f5e9" : (ri%2===0?"#fff":"#f9fafb")
-                                  const bgCell = isToday
-                                    ? (row.is_total ? "#fff3e0" : (ri%2===0?"#fff8f2":"#fff3ec"))
-                                    : bgBase
+                                  const v  = dv[k]
+                                  const nv = typeof v==="number" ? v : 0
+                                  const bgC = isToday3 ? (ri%2===0?"#fff8f2":"#fff3ec") : bg
                                   return (
                                     <td key={d+k} style={{
                                       padding:"4px 6px", fontSize:10, textAlign:"right" as const,
                                       whiteSpace:"nowrap" as const,
-                                      background: bgCell,
+                                      background:bgC,
                                       borderBottom:"0.5px solid rgba(0,0,0,.06)",
                                       borderRight: ki===3 ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
-                                      color: isNeg ? C.red : "inherit",
+                                      color: nv<0 ? C.red : "inherit",
                                     }}>
                                       {fn(v)}
                                     </td>
