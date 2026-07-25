@@ -555,7 +555,8 @@ export default function DashboardPage() {
         position:"sticky" as const, top:0, left:col.l, zIndex:10+i,
         background: i===8 ? "#1b4d24" : "#1a5c2a",
         color:"#fff", padding:"5px 8px", fontWeight:500,
-        whiteSpace:"nowrap" as const, minWidth:col.w,
+        whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
+        width:col.w, minWidth:col.w, maxWidth:col.w,
         textAlign:col.a as any,
         borderRight: i===8 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.15)",
         borderBottom:"1px solid rgba(255,255,255,.2)",
@@ -569,8 +570,8 @@ export default function DashboardPage() {
         borderBottom:"0.5px solid #e0ece0",
         borderRight: i===8 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
         boxShadow: i===8 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
-        whiteSpace:"nowrap" as const,
-        minWidth:col.w,
+        whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
+        width:col.w, minWidth:col.w, maxWidth:col.w,
         textAlign:col.a as any,
       }, extra || {})
     }
