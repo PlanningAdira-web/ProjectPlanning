@@ -682,13 +682,14 @@ export default function DashboardPage() {
   const tabStyle = function(p: Page) {
     const active = page === p
     return {
-      padding:"9px 14px", fontSize:11, cursor:"pointer",
+      padding:"6px 14px", fontSize:11, cursor:"pointer",
       display:"flex", alignItems:"center", gap:5,
-      color: active ? "#fff" : "#a5d6a7",
-      fontWeight: active ? 500 : 400,
-      background:"transparent",
+      color: active ? "#fff" : C.gdark,
+      fontWeight: 500,
+      background: active ? C.gdark : "transparent",
       border:"none",
-      borderBottom: active ? "3px solid #4caf50" : "3px solid transparent",
+      borderRadius:999,
+      whiteSpace:"nowrap" as const,
       transition:"all .15s",
     }
   }
@@ -845,29 +846,47 @@ export default function DashboardPage() {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", fontFamily:"system-ui,sans-serif", background:C.bg }}>
 
-      {/* Header */}
-      <div style={{ background:C.gdark, padding:"0 16px", display:"flex", alignItems:"center", gap:10, height:48, flexShrink:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:36, height:36, borderRadius:10, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0, padding:3, boxShadow:"0 1px 6px rgba(0,0,0,.15)" }}>
+      {/* Header + Tabs (satu baris) */}
+      <div style={{ background:"#eef3ec", padding:"8px 16px", display:"flex", alignItems:"center", gap:16, flexShrink:0, flexWrap:"wrap", borderBottom:"1px solid #c8d6c4" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0, padding:3, border:"0.5px solid #c8d6c4" }}>
             <Image src="/Logo.png" alt="Logo" width={30} height={30} style={{ objectFit:"contain" }} priority/>
           </div>
           <div>
-            <div style={{ color:"#fff", fontSize:14, fontWeight:600, lineHeight:1.2 }}>Production Planning</div>
-            <div style={{ color:"#a5d6a7", fontSize:10, lineHeight:1.2, marginTop:1 }}>PT. Adira Semesta Industry</div>
+            <div style={{ color:C.gdark, fontSize:14, fontWeight:600, lineHeight:1.2 }}>Production Planning</div>
+            <div style={{ color:C.tx3, fontSize:10, lineHeight:1.2, marginTop:1 }}>PT. Adira Semesta Industry</div>
           </div>
         </div>
-        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
+
+        <div style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" }}>
+          {([
+            ["todo","To-Do & Concern"],
+            ["plandst","Planning"],
+            ["matset","Material"],
+            ["shipment","Shipment"],
+            ["sim","Planning Simulation"],
+            ["ai","Chat AI"],
+          ] as [Page,string][]).map(function([p,label]) {
+            return (
+              <button key={p} onClick={function() { setPage(p) }} style={tabStyle(p)}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
           <span style={{ background:C.glight, color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Live</span>
-          <span style={{ color:"#a5d6a7", fontSize:10 }}>{clock}</span>
+          <span style={{ color:C.tx3, fontSize:11 }}>{clock}</span>
           {perms.canRefreshAI && (
             <button onClick={handleRefresh} disabled={refreshing}
-              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", borderRadius:6, border:"none", color:"#fff", fontSize:11, fontWeight:500, cursor:refreshing?"not-allowed":"pointer", background:refreshing?"#388e3c":C.glight }}>
+              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", borderRadius:999, border:"none", color:"#fff", fontSize:11, fontWeight:500, cursor:refreshing?"not-allowed":"pointer", background:refreshing?"#388e3c":C.gdark }}>
               {refreshing ? "Memuat..." : "Refresh AI"}
             </button>
           )}
           <button onClick={async function() { await fetch("/api/auth/logout",{method:"POST"}); router.push("/login") }}
             title="Keluar" aria-label="Keluar"
-            style={{ display:"flex", alignItems:"center", justifyContent:"center", width:28, height:28, background:"transparent", border:"none", cursor:"pointer", color:"#a5d6a7" }}>
+            style={{ display:"flex", alignItems:"center", justifyContent:"center", width:28, height:28, background:"transparent", border:"none", cursor:"pointer", color:C.gdark }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
               <polyline points="16 17 21 12 16 7"/>
@@ -875,24 +894,6 @@ export default function DashboardPage() {
             </svg>
           </button>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ background:C.gdark, padding:"0 16px", display:"flex", borderTop:"1px solid rgba(255,255,255,.12)", flexShrink:0 }}>
-        {([
-          ["todo","To-Do & Concern"],
-          ["plandst","Planning"],
-          ["matset","Material"],
-          ["shipment","Shipment"],
-          ["sim","Planning Simulation"],
-          ["ai","Chat AI"],
-        ] as [Page,string][]).map(function([p,label]) {
-          return (
-            <button key={p} onClick={function() { setPage(p) }} style={tabStyle(p)}>
-              {label}
-            </button>
-          )
-        })}
       </div>
 
       {/* Content */}
