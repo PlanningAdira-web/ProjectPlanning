@@ -233,7 +233,8 @@ export default function DashboardPage() {
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
 
   async function handleRefresh() {
-    if (refreshing || !perms.canRefreshAI) return
+    if (refreshing) return
+    if (!perms.canRefreshAI) { alert("Role Anda tidak bisa melakukan Refresh AI. Hubungi admin jika perlu akses ini."); return }
     setRefreshing(true)
     try {
       const r = await fetch("/api/dashboard?refresh=1")
@@ -858,7 +859,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:2, flexWrap:"wrap", background:"#e3ebe0", borderRadius:999, padding:4 }}>
           {([
             ["todo","To-Do & Concern"],
             ["plandst","Planning"],
@@ -875,15 +876,20 @@ export default function DashboardPage() {
           })}
         </div>
 
-        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, flexShrink:0, background:"#e3ebe0", borderRadius:999, padding:"4px 8px" }}>
           <span style={{ background:C.glight, color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Live</span>
           <span style={{ color:C.tx3, fontSize:11 }}>{clock}</span>
-          {perms.canRefreshAI && (
-            <button onClick={handleRefresh} disabled={refreshing}
-              style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", borderRadius:999, border:"none", color:"#fff", fontSize:11, fontWeight:500, cursor:refreshing?"not-allowed":"pointer", background:refreshing?"#388e3c":C.gdark }}>
-              {refreshing ? "Memuat..." : "Refresh AI"}
-            </button>
-          )}
+          <button onClick={handleRefresh} disabled={refreshing}
+            style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 14px 4px 4px", borderRadius:999, border:"none", cursor:refreshing?"not-allowed":"pointer", background:"#cfe0cb" }}>
+            <span style={{ width:24, height:24, borderRadius:"50%", background:refreshing?"#388e3c":C.gdark, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </span>
+            <span style={{ color:C.gdark, fontSize:12, fontWeight:600 }}>{refreshing ? "Memuat..." : "Refresh AI"}</span>
+          </button>
           <button onClick={async function() { await fetch("/api/auth/logout",{method:"POST"}); router.push("/login") }}
             title="Keluar" aria-label="Keluar"
             style={{ display:"flex", alignItems:"center", justifyContent:"center", width:28, height:28, background:"transparent", border:"none", cursor:"pointer", color:C.gdark }}>
