@@ -197,7 +197,7 @@ export default function DashboardPage() {
   }, [page, planDstData])
 
   useEffect(function() {
-    if (page !== "plansew") return
+    if (page !== "plandst") return
     if (planSewData) return
     setPlanSewLoading(true)
     fetch("/api/plan-sew")
@@ -849,7 +849,7 @@ export default function DashboardPage() {
       <div style={{ background:C.gdark, padding:"0 16px", display:"flex", alignItems:"center", gap:10, height:48, flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:36, height:36, borderRadius:10, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0, padding:3, boxShadow:"0 1px 6px rgba(0,0,0,.15)" }}>
-            <Image src="/Logo.svg" alt="Logo" width={30} height={30} style={{ objectFit:"contain" }} priority/>
+            <Image src="/Logo.png" alt="Logo" width={30} height={30} style={{ objectFit:"contain" }} priority/>
           </div>
           <div>
             <div style={{ color:"#fff", fontSize:14, fontWeight:600, lineHeight:1.2 }}>Production Planning</div>
@@ -859,27 +859,20 @@ export default function DashboardPage() {
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
           <span style={{ background:C.glight, color:"#fff", fontSize:10, padding:"2px 8px", borderRadius:10, fontWeight:500 }}>Live</span>
           <span style={{ color:"#a5d6a7", fontSize:10 }}>{clock}</span>
-          {cache?.has_cache && (
-            <span style={{ fontSize:10, color:"#a5d6a7" }}>
-              Last Updated: {cache.age_label ?? "baru saja"} (by {cache.cached_by})
-            </span>
-          )}
           {perms.canRefreshAI && (
             <button onClick={handleRefresh} disabled={refreshing}
               style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 14px", borderRadius:6, border:"none", color:"#fff", fontSize:11, fontWeight:500, cursor:refreshing?"not-allowed":"pointer", background:refreshing?"#388e3c":C.glight }}>
-              {refreshing ? "Memuat..." : "Refresh Analisis AI"}
+              {refreshing ? "Memuat..." : "Refresh AI"}
             </button>
           )}
-          <div style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(255,255,255,.12)", borderRadius:20, padding:"3px 10px" }}>
-            <div style={{ width:22, height:22, borderRadius:"50%", background:"#ff9800", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:500, color:"#fff" }}>
-              {user.name.slice(0,2).toUpperCase()}
-            </div>
-            <span style={{ color:"#fff", fontSize:11 }}>{user.name}</span>
-            <span style={{ fontSize:9, background:rl.bg, color:rl.color, padding:"1px 6px", borderRadius:8, fontWeight:500 }}>{rl.label}</span>
-          </div>
           <button onClick={async function() { await fetch("/api/auth/logout",{method:"POST"}); router.push("/login") }}
-            style={{ background:"transparent", border:"none", cursor:"pointer", color:"#a5d6a7", fontSize:11 }}>
-            Keluar
+            title="Keluar" aria-label="Keluar"
+            style={{ display:"flex", alignItems:"center", justifyContent:"center", width:28, height:28, background:"transparent", border:"none", cursor:"pointer", color:"#a5d6a7" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -887,14 +880,12 @@ export default function DashboardPage() {
       {/* Tabs */}
       <div style={{ background:C.gdark, padding:"0 16px", display:"flex", borderTop:"1px solid rgba(255,255,255,.12)", flexShrink:0 }}>
         {([
-          ["todo","Planning To-Do & Concern"],
-          ["vis","Dashboard Planning"],
-          ["plandst","Planning Distribusi"],
-          ["plansew","Planning Sewing"],
-          ["shipment","Shipment Set"],
-          ["matset","Material Set"],
+          ["todo","To-Do & Concern"],
+          ["plandst","Planning"],
+          ["matset","Material"],
+          ["shipment","Shipment"],
           ["sim","Planning Simulation"],
-          ["ai","AI Planning Assistant"],
+          ["ai","Chat AI"],
         ] as [Page,string][]).map(function([p,label]) {
           return (
             <button key={p} onClick={function() { setPage(p) }} style={tabStyle(p)}>
@@ -1098,9 +1089,10 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* == PLANNING DISTRIBUSI == */}
+        {/* == PLANNING (Distribusi di atas, Sewing di bawah) == */}
         {page==="plandst" && (
           <div>
+            {/* -- Planning Distribusi -- */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
               <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Planning Distribusi - Plan DST</span>
               <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -1121,14 +1113,13 @@ export default function DashboardPage() {
               </div>
             </div>
             <PlanDstTable/>
-          </div>
-        )}
 
-        {/* == PLANNING SEW == */}
-        {page==="plansew" && (
-          <div>
+            {/* -- Divider antar section -- */}
+            <div style={{ height:1, background:"#c8e6c9", margin:"20px 0" }}/>
+
+            {/* -- Planning Sewing -- */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Planning SEW - Plan SEW</span>
+              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Planning Sewing - Plan SEW</span>
               <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                 {planSewData?.factories?.map(function(f: string) {
                   return (
