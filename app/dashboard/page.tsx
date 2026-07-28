@@ -32,6 +32,42 @@ const C = {
 
 // -- Sub-components -----------------------------------------------
 // -- Main component -----------------------------------------------
+function SearchBox(props: { value: string; onChange: (v: string) => void; placeholder: string; resultCount?: number }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+      <div style={{ position:"relative", flex:"0 1 260px" }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          value={props.value}
+          onChange={function(e) { props.onChange(e.target.value) }}
+          placeholder={props.placeholder}
+          style={{ width:"100%", boxSizing:"border-box", padding:"6px 10px 6px 26px", fontSize:11, border:"0.5px solid #c8e6c9", borderRadius:6, outline:"none", color:C.txt }}
+        />
+        {props.value !== "" && (
+          <button onClick={function() { props.onChange("") }} title="Hapus pencarian" aria-label="Hapus pencarian"
+            style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", border:"none", background:"transparent", cursor:"pointer", color:C.tx3, fontSize:12, lineHeight:1, padding:2 }}>
+            ✕
+          </button>
+        )}
+      </div>
+      {props.value !== "" && props.resultCount !== undefined && (
+        <span style={{ fontSize:10, color:C.tx3 }}>{props.resultCount} baris cocok</span>
+      )}
+    </div>
+  )
+}
+
+function matchSearch(row: any, q: string) {
+  if (!q) return true
+  const needle = q.toLowerCase()
+  const haystack = [row.line, row.spo, row.style].filter(Boolean).join(" ").toLowerCase()
+  return haystack.indexOf(needle) !== -1
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [page,       setPage]       = useState<Page>("todo")
@@ -356,42 +392,6 @@ export default function DashboardPage() {
   function goChat(msg: string) { setPage("ai"); setTimeout(function() { sendAI(msg) }, 200) }
 
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
-
-  function SearchBox(props: { value: string; onChange: (v: string) => void; placeholder: string; resultCount?: number }) {
-    return (
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-        <div style={{ position:"relative", flex:"0 1 260px" }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            value={props.value}
-            onChange={function(e) { props.onChange(e.target.value) }}
-            placeholder={props.placeholder}
-            style={{ width:"100%", boxSizing:"border-box", padding:"6px 10px 6px 26px", fontSize:11, border:"0.5px solid #c8e6c9", borderRadius:6, outline:"none", color:C.txt }}
-          />
-          {props.value !== "" && (
-            <button onClick={function() { props.onChange("") }} title="Hapus pencarian" aria-label="Hapus pencarian"
-              style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", border:"none", background:"transparent", cursor:"pointer", color:C.tx3, fontSize:12, lineHeight:1, padding:2 }}>
-              ✕
-            </button>
-          )}
-        </div>
-        {props.value !== "" && props.resultCount !== undefined && (
-          <span style={{ fontSize:10, color:C.tx3 }}>{props.resultCount} baris cocok</span>
-        )}
-      </div>
-    )
-  }
-
-  function matchSearch(row: any, q: string) {
-    if (!q) return true
-    const needle = q.toLowerCase()
-    const haystack = [row.line, row.spo, row.style].filter(Boolean).join(" ").toLowerCase()
-    return haystack.indexOf(needle) !== -1
-  }
 
   function PlanSewTable() {
     if (planSewLoading) return (
