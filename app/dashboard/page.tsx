@@ -47,9 +47,11 @@ export default function DashboardPage() {
   const [planDstData,   setPlanDstData]   = useState<any>(null)
   const [planDstFactory,setPlanDstFactory]= useState("K")
   const [planDstLoading,setPlanDstLoading]= useState(false)
+  const [planDstSearch, setPlanDstSearch] = useState("")
   const [planSewData,   setPlanSewData]   = useState<any>(null)
   const [planSewFactory,setPlanSewFactory]= useState("K")
   const [planSewLoading,setPlanSewLoading]= useState(false)
+  const [planSewSearch, setPlanSewSearch] = useState("")
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
   const [matSetData,    setMatSetData]    = useState<any>(null)
@@ -355,6 +357,42 @@ export default function DashboardPage() {
 
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
 
+  function SearchBox(props: { value: string; onChange: (v: string) => void; placeholder: string; resultCount?: number }) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+        <div style={{ position:"relative", flex:"0 1 260px" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.tx3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ position:"absolute", left:8, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            value={props.value}
+            onChange={function(e) { props.onChange(e.target.value) }}
+            placeholder={props.placeholder}
+            style={{ width:"100%", boxSizing:"border-box", padding:"6px 10px 6px 26px", fontSize:11, border:"0.5px solid #c8e6c9", borderRadius:6, outline:"none", color:C.txt }}
+          />
+          {props.value !== "" && (
+            <button onClick={function() { props.onChange("") }} title="Hapus pencarian" aria-label="Hapus pencarian"
+              style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", border:"none", background:"transparent", cursor:"pointer", color:C.tx3, fontSize:12, lineHeight:1, padding:2 }}>
+              ✕
+            </button>
+          )}
+        </div>
+        {props.value !== "" && props.resultCount !== undefined && (
+          <span style={{ fontSize:10, color:C.tx3 }}>{props.resultCount} baris cocok</span>
+        )}
+      </div>
+    )
+  }
+
+  function matchSearch(row: any, q: string) {
+    if (!q) return true
+    const needle = q.toLowerCase()
+    const haystack = [row.line, row.spo, row.style].filter(Boolean).join(" ").toLowerCase()
+    return haystack.indexOf(needle) !== -1
+  }
+
   function PlanSewTable() {
     if (planSewLoading) return (
       <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
@@ -366,7 +404,7 @@ export default function DashboardPage() {
         Gagal memuat data. Pastikan sheet Plan SEW tersedia.
       </div>
     )
-    const rows: any[]    = planSewData.rows[planSewFactory] ?? []
+    const rows: any[]    = (planSewData.rows[planSewFactory] ?? []).filter(function(r: any) { return matchSearch(r, planSewSearch) })
     const dates: string[]= planSewData.date_headers ?? []
     const today          = new Date()
     const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
@@ -424,6 +462,12 @@ export default function DashboardPage() {
 
     return (
       <div>
+        <SearchBox value={planSewSearch} onChange={setPlanSewSearch} placeholder="Cari SPO, style, atau line..." resultCount={rows.length}/>
+        {rows.length === 0 ? (
+          <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+            Tidak ada baris yang cocok dengan pencarian "{planSewSearch}".
+          </div>
+        ) : (
         <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
           <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
             <thead>
@@ -496,6 +540,7 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
+        )}
         <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
@@ -519,7 +564,7 @@ export default function DashboardPage() {
         Gagal memuat data. Pastikan sheet Plan DST tersedia.
       </div>
     )
-    const rows: any[]    = planDstData.rows[planDstFactory] ?? []
+    const rows: any[]    = (planDstData.rows[planDstFactory] ?? []).filter(function(r: any) { return matchSearch(r, planDstSearch) })
     const dates: string[]= planDstData.date_headers ?? []
     const today          = new Date()
     const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
@@ -579,6 +624,12 @@ export default function DashboardPage() {
 
     return (
       <div>
+        <SearchBox value={planDstSearch} onChange={setPlanDstSearch} placeholder="Cari SPO, style, atau line..." resultCount={rows.length}/>
+        {rows.length === 0 ? (
+          <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+            Tidak ada baris yang cocok dengan pencarian "{planDstSearch}".
+          </div>
+        ) : (
         <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
           <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content", tableLayout:"auto" }}>
             <thead>
@@ -662,6 +713,7 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
+        )}
         <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
           <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
