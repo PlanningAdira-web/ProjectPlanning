@@ -64,7 +64,7 @@ function SearchBox(props: { value: string; onChange: (v: string) => void; placeh
 function matchSearch(row: any, q: string) {
   if (!q) return true
   const needle = q.toLowerCase()
-  const haystack = [row.line, row.spo, row.style].filter(Boolean).join(" ").toLowerCase()
+  const haystack = [row.line, row.spo, row.style, row.buyer].filter(Boolean).join(" ").toLowerCase()
   return haystack.indexOf(needle) !== -1
 }
 
@@ -450,9 +450,11 @@ export default function DashboardPage() {
   const [planSewSearch, setPlanSewSearch] = useState("")
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
+  const [shipmentSearch, setShipmentSearch]  = useState("")
   const [matSetData,    setMatSetData]    = useState<any>(null)
   const [matSetLoading, setMatSetLoading] = useState(false)
   const [matSetFact,    setMatSetFact]    = useState("all")
+  const [matSetSearch,  setMatSetSearch]  = useState("")
   
   
   
@@ -1309,6 +1311,12 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <SearchBox value={shipmentSearch} onChange={setShipmentSearch} placeholder="Cari SPO, style, line, atau buyer..." resultCount={shipmentData ? (shipmentData.rows ?? []).filter(function(r: any) {
+              if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
+              if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
+              return matchSearch(r, shipmentSearch)
+            }).length : undefined}/>
+
             {shipmentLoading && (
               <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
                 Memuat data dari sheet Shipment Set...
@@ -1338,6 +1346,7 @@ export default function DashboardPage() {
               const filtered = shipmentData.rows.filter(function(r: any) {
                 if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
                 if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
+                if (!matchSearch(r, shipmentSearch)) return false
                 return true
               })
 
@@ -1353,6 +1362,11 @@ export default function DashboardPage() {
 
               return (
                 <div>
+                  {filtered.length === 0 ? (
+                    <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+                      Tidak ada baris yang cocok dengan filter/pencarian saat ini.
+                    </div>
+                  ) : (
                   <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 200px)" }}>
                     <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
                       <thead>
@@ -1416,6 +1430,7 @@ export default function DashboardPage() {
                       </tbody>
                     </table>
                   </div>
+                  )}
                   <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
                     <span>Total baris: <strong style={{ color:C.txt }}>{filtered.length}</strong></span>
                     <span>Total Qty: <strong style={{ color:C.gdark }}>{totalQty.toLocaleString("en-US")}</strong></span>
@@ -1462,6 +1477,12 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <SearchBox value={matSetSearch} onChange={setMatSetSearch} placeholder="Cari SPO atau style..." resultCount={matSetData ? (matSetData.rows ?? []).filter(function(r:any) {
+              if (r.is_total) return false
+              if (matSetFact !== "all" && r.fact !== matSetFact) return false
+              return matchSearch(r, matSetSearch)
+            }).length : undefined}/>
+
             {matSetLoading && (
               <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
                 Memuat data dari sheet IN Material Produksi...
@@ -1476,7 +1497,7 @@ export default function DashboardPage() {
                 if (r.is_total) return false
                 if (matSetFact === "all") return true
                 return r.fact === matSetFact
-              })
+              }).filter(function(r: any) { return matchSearch(r, matSetSearch) })
               const filtered  = [...totalRows, ...dataRows]
 
               const fn = function(v: number | string | "") {
@@ -1667,6 +1688,13 @@ export default function DashboardPage() {
                           )
                         })}
                                                 {/* Data rows */}
+                        {dataRows.length === 0 && (
+                          <tr>
+                            <td colSpan={FR.length + dates.length * 4} style={{ padding:"20px", textAlign:"center", color:C.tx3, fontSize:11 }}>
+                              Tidak ada baris yang cocok dengan pencarian "{matSetSearch}".
+                            </td>
+                          </tr>
+                        )}
                         {dataRows.map(function(row:any, ri:number) {
                           const bg = ri%2===0?"#fff":"#f9fafb"
                           return (
