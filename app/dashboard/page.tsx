@@ -68,6 +68,366 @@ function matchSearch(row: any, q: string) {
   return haystack.indexOf(needle) !== -1
 }
 
+function ageLabel(isoOrLocale: string): string {
+  if (!isoOrLocale) return ""
+  try {
+    const ts = typeof isoOrLocale === "number" ? isoOrLocale : Date.parse(isoOrLocale)
+    if (isNaN(ts)) return isoOrLocale
+    const mins = Math.round((Date.now() - ts) / 60000)
+    if (mins < 1)   return "baru saja"
+    if (mins < 60)  return mins + " menit lalu"
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    if (h < 24) return h + " jam" + (m > 0 ? " " + m + " menit" : "") + " lalu"
+    return Math.floor(h / 24) + " hari lalu"
+  } catch { return isoOrLocale }
+}
+
+type PlanTableProps = {
+  loading: boolean
+  data: any
+  factory: string
+  search: string
+  setSearch: (v: string) => void
+}
+
+function PlanSewTable(props: PlanTableProps) {
+  const { loading, data, factory, search, setSearch } = props
+  if (loading) return (
+    <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+      Memuat data dari sheet Plan SEW...
+    </div>
+  )
+  if (!data) return (
+    <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+      Gagal memuat data. Pastikan sheet Plan SEW tersedia.
+    </div>
+  )
+  const rows: any[]    = (data.rows[factory] ?? []).filter(function(r: any) { return matchSearch(r, search) })
+  const dates: string[]= data.date_headers ?? []
+  const today          = new Date()
+  const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
+
+  const currWeek = new Set(
+    dates.filter(function(d: string) {
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+      const p = d.split("-")
+      const mIdx = months.findIndex(function(m: string) { return m === p[1] })
+      if (mIdx < 0) return false
+      const dt   = new Date(todayWIB.getFullYear(), mIdx, parseInt(p[0]))
+      const diff = (dt.getTime() - todayWIB.getTime()) / 86400000
+      return diff >= 0 && diff < 7
+    })
+  )
+
+  const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
+
+  // Freeze 7 kolom: A-G
+  const FREEZE = [
+    { h:"LINE",         w:44,  l:0,   a:"left"   },
+    { h:"SPO",          w:68,  l:44,  a:"left"   },
+    { h:"STYLE",        w:160, l:112, a:"left"   },
+    { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
+    { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
+    { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
+    { h:"Fact",         w:40,  l:502, a:"center" },
+    { h:"DST",          w:56,  l:542, a:"right"  },
+    { h:"SEW",          w:64,  l:598, a:"right"  },
+  ] as { h:string; w:number; l:number; a:string }[]
+
+  const sth = function(col: typeof FREEZE[0], i: number) {
+    return {
+      position:"sticky" as const, top:0, left:col.l, zIndex:4+i,
+      background: i===6 ? "#1b4d24" : "#1a5c2a",
+      color:"#fff", padding:"5px 8px", fontWeight:500,
+      whiteSpace:"nowrap" as const, minWidth:col.w,
+      textAlign:col.a as any,
+      borderRight: i===6 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.15)",
+      borderBottom:"1px solid rgba(255,255,255,.2)",
+    }
+  }
+
+  const std = function(col: typeof FREEZE[0], i: number, bg: string, extra?: any) {
+    return Object.assign({
+      position:"sticky" as const, left:col.l, zIndex:1,
+      background:bg, padding:"5px 8px",
+      borderBottom:"0.5px solid #e0ece0",
+      borderRight: i===6 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
+      boxShadow: i===6 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
+      whiteSpace:"nowrap" as const, minWidth:col.w,
+      textAlign:col.a as any,
+    }, extra || {})
+  }
+
+  return (
+    <div>
+      <SearchBox value={search} onChange={setSearch} placeholder="Cari SPO, style, atau line..." resultCount={rows.length}/>
+      {rows.length === 0 ? (
+        <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+          Tidak ada baris yang cocok dengan pencarian "{search}".
+        </div>
+      ) : (
+      <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
+        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+          <thead>
+            <tr>
+              {FREEZE.map(function(col, i) {
+                return <th key={i} style={sth(col, i)}>{col.h}</th>
+              })}
+              {dates.map(function(d: string) {
+                return (
+                  <th key={d} style={{
+                    position:"sticky", top:0, zIndex:2,
+                    background: currWeek.has(d) ? "#2e7d32" : "#1a5c2a",
+                    color:"#fff", padding:"5px 8px", fontWeight:500,
+                    whiteSpace:"nowrap", minWidth:54, textAlign:"center",
+                    borderRight:"0.5px solid rgba(255,255,255,.1)",
+                    borderBottom:"1px solid rgba(255,255,255,.2)",
+                  }}>{d}</th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map(function(line: any, li: number) {
+              const lr   = rows.filter(function(r: any) { return r.line === line })
+              const bg   = li % 2 === 0 ? "#e8f5e9" : "#fff"
+              const bgCr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
+              return lr.map(function(row: any, ri: number) {
+                return (
+                  <tr key={String(li)+"-"+String(ri)}>
+                    <td style={std(FREEZE[0], 0, bg)}>
+                      {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
+                    </td>
+                    <td style={Object.assign(std(FREEZE[1], 1, bg), { color:C.blue })}>{row.spo}</td>
+                    <td style={std(FREEZE[2], 2, bg, { maxWidth:160, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
+                    <td style={std(FREEZE[3], 3, bg, { fontWeight:500 })}>{row.qty_order ? Number(row.qty_order).toLocaleString("en-US") : ""}</td>
+                    <td style={std(FREEZE[4], 4, bg, { fontWeight:500 })}>{row.qty_plan  ? Number(row.qty_plan).toLocaleString("en-US")  : ""}</td>
+                    <td style={std(FREEZE[5], 5, bg, { fontSize:9, color:C.tx2, fontStyle:"italic" })}>{row.fprc}</td>
+                    <td style={std(FREEZE[6], 6, bg, { textAlign:"center" })}>
+                      <span style={{ background:"#e0f2f1", color:C.teal, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>
+                        {row.fact}
+                      </span>
+                    </td>
+                    <td style={std(FREEZE[7], 7, bg, { textAlign:"right" })}>
+                      {row.dst !== "" && row.dst !== 0
+                        ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("en-US")}</span>
+                        : ""}
+                    </td>
+                    <td style={std(FREEZE[8], 8, bg, { textAlign:"right" })}>
+                      {row.sew !== "" && row.sew !== 0
+                        ? <span style={{ color:C.teal, fontWeight:500 }}>{Number(row.sew).toLocaleString("en-US")}</span>
+                        : ""}
+                    </td>
+                    {dates.map(function(d: string) {
+                      const val    = row.dates[d]
+                      const cellBg = currWeek.has(d) ? bgCr : bg
+                      return (
+                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
+                          {val === "F"
+                            ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
+                            : (val !== "" && val !== undefined && val !== null)
+                              ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(val).toLocaleString("en-US")}</span>
+                              : null}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })
+            })}
+          </tbody>
+        </table>
+      </div>
+      )}
+      <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
+        <span style={{ color:C.red, fontWeight:700 }}>F</span><span>= Akhir planning</span>
+        <span style={{ marginLeft:"auto" }}>Freeze s/d kolom G - Scroll kanan untuk semua tanggal</span>
+        {data?.fetched_epoch && <span>Update: {ageLabel(data.fetched_epoch)}</span>}
+      </div>
+    </div>
+  )
+}
+
+function PlanDstTable(props: PlanTableProps) {
+  const { loading, data, factory, search, setSearch } = props
+  if (loading) return (
+    <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+      Memuat data dari sheet Plan DST...
+    </div>
+  )
+  if (!data) return (
+    <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+      Gagal memuat data. Pastikan sheet Plan DST tersedia.
+    </div>
+  )
+  const rows: any[]    = (data.rows[factory] ?? []).filter(function(r: any) { return matchSearch(r, search) })
+  const dates: string[]= data.date_headers ?? []
+  const today          = new Date()
+  const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
+
+  const currWeek = new Set(
+    dates.filter(function(d: string) {
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+      const p = d.split("-")
+      const mIdx = months.findIndex(function(m: string) { return m === p[1] })
+      if (mIdx < 0) return false
+      const year = todayWIB.getFullYear()
+      const dt   = new Date(year, mIdx, parseInt(p[0]))
+      const diff = (dt.getTime() - todayWIB.getTime()) / 86400000
+      return diff >= 0 && diff < 7
+    })
+  )
+
+  const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
+
+  const FREEZE_COLS = [
+    { h:"LINE",         w:44,  l:0,   a:"left"   },
+    { h:"SPO",          w:68,  l:44,  a:"left"   },
+    { h:"STYLE",        w:160, l:112, a:"left"   },
+    { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
+    { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
+    { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
+    { h:"Fact",         w:40,  l:502, a:"center" },
+    { h:"DST",          w:56,  l:542, a:"right"  },
+    { h:"SEW",          w:64,  l:598, a:"right"  },
+  ] as { h:string; w:number; l:number; a:string }[]
+
+  const stickyTh = function(col: typeof FREEZE_COLS[0], i: number) {
+    return {
+      position:"sticky" as const, top:0, left:col.l, zIndex:10+i,
+      background: i===8 ? "#1b4d24" : "#1a5c2a",
+      color:"#fff", padding:"5px 8px", fontWeight:500,
+      whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
+      width:col.w, minWidth:col.w, maxWidth:col.w,
+      textAlign:col.a as any,
+      borderRight: i===8 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.15)",
+      borderBottom:"1px solid rgba(255,255,255,.2)",
+    }
+  }
+
+  const stickyTd = function(col: typeof FREEZE_COLS[0], i: number, bg: string, extra?: any) {
+    return Object.assign({
+      position:"sticky" as const, left:col.l, zIndex:5,
+      background:bg, padding:"5px 8px",
+      borderBottom:"0.5px solid #e0ece0",
+      borderRight: i===8 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
+      boxShadow: i===8 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
+      whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
+      width:col.w, minWidth:col.w, maxWidth:col.w,
+      textAlign:col.a as any,
+    }, extra || {})
+  }
+
+  return (
+    <div>
+      <SearchBox value={search} onChange={setSearch} placeholder="Cari SPO, style, atau line..." resultCount={rows.length}/>
+      {rows.length === 0 ? (
+        <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+          Tidak ada baris yang cocok dengan pencarian "{search}".
+        </div>
+      ) : (
+      <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
+        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content", tableLayout:"auto" }}>
+          <thead>
+            <tr>
+              {FREEZE_COLS.map(function(col, i) {
+                return <th key={i} style={stickyTh(col, i)}>{col.h}</th>
+              })}
+              {dates.map(function(d: string) {
+                const isCurr = currWeek.has(d)
+                return (
+                  <th key={d} style={{
+                    position:"sticky", top:0, zIndex:1,
+                    background: isCurr ? "#2e7d32" : "#1a5c2a",
+                    color:"#fff", padding:"5px 8px", fontWeight:500,
+                    whiteSpace:"nowrap", minWidth:56, textAlign:"center",
+                    borderRight:"0.5px solid rgba(255,255,255,.1)",
+                    borderBottom:"1px solid rgba(255,255,255,.2)",
+                  }}>{d}</th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map(function(line: any, li: number) {
+              const lr   = rows.filter(function(r: any) { return r.line === line })
+              const bg   = li % 2 === 0 ? "#e8f5e9" : "#fff"
+              const bgCr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
+              return lr.map(function(row: any, ri: number) {
+                return (
+                  <tr key={String(li)+"-"+String(ri)}>
+                    <td style={stickyTd(FREEZE_COLS[0], 0, bg)}>
+                      {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
+                    </td>
+                    <td style={Object.assign(stickyTd(FREEZE_COLS[1], 1, bg), { color:C.blue })}>
+                      {row.spo}
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[2], 2, bg, { maxWidth:160, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>
+                      {row.style}
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[3], 3, bg, { fontWeight:500 })}>
+                      {row.qty_order ? Number(row.qty_order).toLocaleString("en-US") : ""}
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[4], 4, bg, { fontWeight:500 })}>
+                      {row.qty_plan ? Number(row.qty_plan).toLocaleString("en-US") : ""}
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[5], 5, bg, { fontSize:9, color:C.tx2, fontStyle:"italic" })}>
+                      {row.fprc}
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[6], 6, bg, { textAlign:"center" })}>
+                      <span style={{ background:"#fff3e0", color:C.org, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>
+                        {row.fact}
+                      </span>
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[7], 7, bg, { textAlign:"right" })}>
+                      {row.dst !== "" && row.dst !== 0
+                        ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("en-US")}</span>
+                        : ""}
+                    </td>
+                    <td style={stickyTd(FREEZE_COLS[8], 8, bg, { textAlign:"right" })}>
+                      {row.sew !== "" && row.sew !== 0
+                        ? <span style={{ color:C.teal, fontWeight:500 }}>{Number(row.sew).toLocaleString("en-US")}</span>
+                        : ""}
+                    </td>
+                    {dates.map(function(d: string) {
+                      const val    = row.dates[d]
+                      const cellBg = currWeek.has(d) ? bgCr : bg
+                      return (
+                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
+                          {val === "F"
+                            ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
+                            : (val !== "" && val !== undefined && val !== null)
+                              ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(val).toLocaleString("en-US")}</span>
+                              : null}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })
+            })}
+          </tbody>
+        </table>
+      </div>
+      )}
+      <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
+        <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
+        <span style={{ color:C.red, fontWeight:700 }}>F</span><span>= Akhir planning</span>
+        <span style={{ marginLeft:"auto" }}>Freeze s/d kolom SEW (I) - Scroll kanan untuk semua tanggal</span>
+        {data?.fetched_epoch && (
+          <span>Update: {ageLabel(data.fetched_epoch)}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [page,       setPage]       = useState<Page>("todo")
@@ -393,340 +753,6 @@ export default function DashboardPage() {
 
   const rl = user ? ROLE_META[user.role] : ROLE_META.viewer
 
-  function PlanSewTable() {
-    if (planSewLoading) return (
-      <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
-        Memuat data dari sheet Plan SEW...
-      </div>
-    )
-    if (!planSewData) return (
-      <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
-        Gagal memuat data. Pastikan sheet Plan SEW tersedia.
-      </div>
-    )
-    const rows: any[]    = (planSewData.rows[planSewFactory] ?? []).filter(function(r: any) { return matchSearch(r, planSewSearch) })
-    const dates: string[]= planSewData.date_headers ?? []
-    const today          = new Date()
-    const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
-
-    const currWeek = new Set(
-      dates.filter(function(d: string) {
-        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-        const p = d.split("-")
-        const mIdx = months.findIndex(function(m: string) { return m === p[1] })
-        if (mIdx < 0) return false
-        const dt   = new Date(todayWIB.getFullYear(), mIdx, parseInt(p[0]))
-        const diff = (dt.getTime() - todayWIB.getTime()) / 86400000
-        return diff >= 0 && diff < 7
-      })
-    )
-
-    const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
-
-    // Freeze 7 kolom: A-G
-    const FREEZE = [
-      { h:"LINE",         w:44,  l:0,   a:"left"   },
-      { h:"SPO",          w:68,  l:44,  a:"left"   },
-      { h:"STYLE",        w:160, l:112, a:"left"   },
-      { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
-      { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
-      { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
-      { h:"Fact",         w:40,  l:502, a:"center" },
-      { h:"DST",          w:56,  l:542, a:"right"  },
-      { h:"SEW",          w:64,  l:598, a:"right"  },
-    ] as { h:string; w:number; l:number; a:string }[]
-
-    const sth = function(col: typeof FREEZE[0], i: number) {
-      return {
-        position:"sticky" as const, top:0, left:col.l, zIndex:4+i,
-        background: i===6 ? "#1b4d24" : "#1a5c2a",
-        color:"#fff", padding:"5px 8px", fontWeight:500,
-        whiteSpace:"nowrap" as const, minWidth:col.w,
-        textAlign:col.a as any,
-        borderRight: i===6 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.15)",
-        borderBottom:"1px solid rgba(255,255,255,.2)",
-      }
-    }
-
-    const std = function(col: typeof FREEZE[0], i: number, bg: string, extra?: any) {
-      return Object.assign({
-        position:"sticky" as const, left:col.l, zIndex:1,
-        background:bg, padding:"5px 8px",
-        borderBottom:"0.5px solid #e0ece0",
-        borderRight: i===6 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
-        boxShadow: i===6 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
-        whiteSpace:"nowrap" as const, minWidth:col.w,
-        textAlign:col.a as any,
-      }, extra || {})
-    }
-
-    return (
-      <div>
-        <SearchBox value={planSewSearch} onChange={setPlanSewSearch} placeholder="Cari SPO, style, atau line..." resultCount={rows.length}/>
-        {rows.length === 0 ? (
-          <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
-            Tidak ada baris yang cocok dengan pencarian "{planSewSearch}".
-          </div>
-        ) : (
-        <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
-          <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
-            <thead>
-              <tr>
-                {FREEZE.map(function(col, i) {
-                  return <th key={i} style={sth(col, i)}>{col.h}</th>
-                })}
-                {dates.map(function(d: string) {
-                  return (
-                    <th key={d} style={{
-                      position:"sticky", top:0, zIndex:2,
-                      background: currWeek.has(d) ? "#2e7d32" : "#1a5c2a",
-                      color:"#fff", padding:"5px 8px", fontWeight:500,
-                      whiteSpace:"nowrap", minWidth:54, textAlign:"center",
-                      borderRight:"0.5px solid rgba(255,255,255,.1)",
-                      borderBottom:"1px solid rgba(255,255,255,.2)",
-                    }}>{d}</th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map(function(line: any, li: number) {
-                const lr   = rows.filter(function(r: any) { return r.line === line })
-                const bg   = li % 2 === 0 ? "#e8f5e9" : "#fff"
-                const bgCr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
-                return lr.map(function(row: any, ri: number) {
-                  return (
-                    <tr key={String(li)+"-"+String(ri)}>
-                      <td style={std(FREEZE[0], 0, bg)}>
-                        {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
-                      </td>
-                      <td style={Object.assign(std(FREEZE[1], 1, bg), { color:C.blue })}>{row.spo}</td>
-                      <td style={std(FREEZE[2], 2, bg, { maxWidth:160, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>{row.style}</td>
-                      <td style={std(FREEZE[3], 3, bg, { fontWeight:500 })}>{row.qty_order ? Number(row.qty_order).toLocaleString("en-US") : ""}</td>
-                      <td style={std(FREEZE[4], 4, bg, { fontWeight:500 })}>{row.qty_plan  ? Number(row.qty_plan).toLocaleString("en-US")  : ""}</td>
-                      <td style={std(FREEZE[5], 5, bg, { fontSize:9, color:C.tx2, fontStyle:"italic" })}>{row.fprc}</td>
-                      <td style={std(FREEZE[6], 6, bg, { textAlign:"center" })}>
-                        <span style={{ background:"#e0f2f1", color:C.teal, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>
-                          {row.fact}
-                        </span>
-                      </td>
-                      <td style={std(FREEZE[7], 7, bg, { textAlign:"right" })}>
-                        {row.dst !== "" && row.dst !== 0
-                          ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("en-US")}</span>
-                          : ""}
-                      </td>
-                      <td style={std(FREEZE[8], 8, bg, { textAlign:"right" })}>
-                        {row.sew !== "" && row.sew !== 0
-                          ? <span style={{ color:C.teal, fontWeight:500 }}>{Number(row.sew).toLocaleString("en-US")}</span>
-                          : ""}
-                      </td>
-                      {dates.map(function(d: string) {
-                        const val    = row.dates[d]
-                        const cellBg = currWeek.has(d) ? bgCr : bg
-                        return (
-                          <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
-                            {val === "F"
-                              ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
-                              : (val !== "" && val !== undefined && val !== null)
-                                ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(val).toLocaleString("en-US")}</span>
-                                : null}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })
-              })}
-            </tbody>
-          </table>
-        </div>
-        )}
-        <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
-          <span style={{ color:C.red, fontWeight:700 }}>F</span><span>= Akhir planning</span>
-          <span style={{ marginLeft:"auto" }}>Freeze s/d kolom G - Scroll kanan untuk semua tanggal</span>
-          {planSewData?.fetched_epoch && <span>Update: {ageLabel(planSewData.fetched_epoch)}</span>}
-        </div>
-      </div>
-    )
-  }
-
-  function PlanDstTable() {
-    if (planDstLoading) return (
-      <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
-        Memuat data dari sheet Plan DST...
-      </div>
-    )
-    if (!planDstData) return (
-      <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
-        Gagal memuat data. Pastikan sheet Plan DST tersedia.
-      </div>
-    )
-    const rows: any[]    = (planDstData.rows[planDstFactory] ?? []).filter(function(r: any) { return matchSearch(r, planDstSearch) })
-    const dates: string[]= planDstData.date_headers ?? []
-    const today          = new Date()
-    const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
-
-    const currWeek = new Set(
-      dates.filter(function(d: string) {
-        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-        const p = d.split("-")
-        const mIdx = months.findIndex(function(m: string) { return m === p[1] })
-        if (mIdx < 0) return false
-        const year = todayWIB.getFullYear()
-        const dt   = new Date(year, mIdx, parseInt(p[0]))
-        const diff = (dt.getTime() - todayWIB.getTime()) / 86400000
-        return diff >= 0 && diff < 7
-      })
-    )
-
-    const lines = Array.from(new Set(rows.map(function(r: any) { return r.line })))
-
-    const FREEZE_COLS = [
-      { h:"LINE",         w:44,  l:0,   a:"left"   },
-      { h:"SPO",          w:68,  l:44,  a:"left"   },
-      { h:"STYLE",        w:160, l:112, a:"left"   },
-      { h:"QTY ORDER",    w:72,  l:272, a:"right"  },
-      { h:"QTY PLAN",     w:68,  l:344, a:"right"  },
-      { h:"RENCANA F.PROD", w:90,  l:412, a:"left"   },
-      { h:"Fact",         w:40,  l:502, a:"center" },
-      { h:"DST",          w:56,  l:542, a:"right"  },
-      { h:"SEW",          w:64,  l:598, a:"right"  },
-    ] as { h:string; w:number; l:number; a:string }[]
-
-    const stickyTh = function(col: typeof FREEZE_COLS[0], i: number) {
-      return {
-        position:"sticky" as const, top:0, left:col.l, zIndex:10+i,
-        background: i===8 ? "#1b4d24" : "#1a5c2a",
-        color:"#fff", padding:"5px 8px", fontWeight:500,
-        whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
-        width:col.w, minWidth:col.w, maxWidth:col.w,
-        textAlign:col.a as any,
-        borderRight: i===8 ? "2px solid rgba(255,255,255,.35)" : "0.5px solid rgba(255,255,255,.15)",
-        borderBottom:"1px solid rgba(255,255,255,.2)",
-      }
-    }
-
-    const stickyTd = function(col: typeof FREEZE_COLS[0], i: number, bg: string, extra?: any) {
-      return Object.assign({
-        position:"sticky" as const, left:col.l, zIndex:5,
-        background:bg, padding:"5px 8px",
-        borderBottom:"0.5px solid #e0ece0",
-        borderRight: i===8 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
-        boxShadow: i===8 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
-        whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
-        width:col.w, minWidth:col.w, maxWidth:col.w,
-        textAlign:col.a as any,
-      }, extra || {})
-    }
-
-    return (
-      <div>
-        <SearchBox value={planDstSearch} onChange={setPlanDstSearch} placeholder="Cari SPO, style, atau line..." resultCount={rows.length}/>
-        {rows.length === 0 ? (
-          <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
-            Tidak ada baris yang cocok dengan pencarian "{planDstSearch}".
-          </div>
-        ) : (
-        <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 180px)" }}>
-          <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content", tableLayout:"auto" }}>
-            <thead>
-              <tr>
-                {FREEZE_COLS.map(function(col, i) {
-                  return <th key={i} style={stickyTh(col, i)}>{col.h}</th>
-                })}
-                {dates.map(function(d: string) {
-                  const isCurr = currWeek.has(d)
-                  return (
-                    <th key={d} style={{
-                      position:"sticky", top:0, zIndex:1,
-                      background: isCurr ? "#2e7d32" : "#1a5c2a",
-                      color:"#fff", padding:"5px 8px", fontWeight:500,
-                      whiteSpace:"nowrap", minWidth:56, textAlign:"center",
-                      borderRight:"0.5px solid rgba(255,255,255,.1)",
-                      borderBottom:"1px solid rgba(255,255,255,.2)",
-                    }}>{d}</th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map(function(line: any, li: number) {
-                const lr   = rows.filter(function(r: any) { return r.line === line })
-                const bg   = li % 2 === 0 ? "#e8f5e9" : "#fff"
-                const bgCr = li % 2 === 0 ? "#d0ecd3" : "#f1f8f2"
-                return lr.map(function(row: any, ri: number) {
-                  return (
-                    <tr key={String(li)+"-"+String(ri)}>
-                      <td style={stickyTd(FREEZE_COLS[0], 0, bg)}>
-                        {ri===0 && <strong style={{ color:C.gdark }}>{row.line}</strong>}
-                      </td>
-                      <td style={Object.assign(stickyTd(FREEZE_COLS[1], 1, bg), { color:C.blue })}>
-                        {row.spo}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[2], 2, bg, { maxWidth:160, overflow:"hidden", textOverflow:"ellipsis" })} title={row.style}>
-                        {row.style}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[3], 3, bg, { fontWeight:500 })}>
-                        {row.qty_order ? Number(row.qty_order).toLocaleString("en-US") : ""}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[4], 4, bg, { fontWeight:500 })}>
-                        {row.qty_plan ? Number(row.qty_plan).toLocaleString("en-US") : ""}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[5], 5, bg, { fontSize:9, color:C.tx2, fontStyle:"italic" })}>
-                        {row.fprc}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[6], 6, bg, { textAlign:"center" })}>
-                        <span style={{ background:"#fff3e0", color:C.org, fontSize:8, padding:"1px 5px", borderRadius:6, fontWeight:500 }}>
-                          {row.fact}
-                        </span>
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[7], 7, bg, { textAlign:"right" })}>
-                        {row.dst !== "" && row.dst !== 0
-                          ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(row.dst).toLocaleString("en-US")}</span>
-                          : ""}
-                      </td>
-                      <td style={stickyTd(FREEZE_COLS[8], 8, bg, { textAlign:"right" })}>
-                        {row.sew !== "" && row.sew !== 0
-                          ? <span style={{ color:C.teal, fontWeight:500 }}>{Number(row.sew).toLocaleString("en-US")}</span>
-                          : ""}
-                      </td>
-                      {dates.map(function(d: string) {
-                        const val    = row.dates[d]
-                        const cellBg = currWeek.has(d) ? bgCr : bg
-                        return (
-                          <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
-                            {val === "F"
-                              ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
-                              : (val !== "" && val !== undefined && val !== null)
-                                ? <span style={{ color:C.gdark, fontWeight:500 }}>{Number(val).toLocaleString("en-US")}</span>
-                                : null}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })
-              })}
-            </tbody>
-          </table>
-        </div>
-        )}
-        <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#e8f5e9", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line ganjil</span>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#fff", border:"0.5px solid #ddd", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Line genap</span>
-          <span><span style={{ display:"inline-block", width:9, height:9, background:"#d0ecd3", border:"0.5px solid #a5d6a7", borderRadius:2, verticalAlign:"middle", marginRight:2 }}></span>Minggu ini</span>
-          <span style={{ color:C.red, fontWeight:700 }}>F</span><span>= Akhir planning</span>
-          <span style={{ marginLeft:"auto" }}>Freeze s/d kolom SEW (I) - Scroll kanan untuk semua tanggal</span>
-          {planDstData?.fetched_epoch && (
-            <span>Update: {ageLabel(planDstData.fetched_epoch)}</span>
-          )}
-        </div>
-      </div>
-    )
-  }
 
   if (!user) {
     return <div style={{ height:"100vh", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui", color:C.tx3 }}>Memuat...</div>
@@ -770,22 +796,6 @@ export default function DashboardPage() {
       return <span style={{ color:"#c62828" }}>({abs})</span>
     }
     return <span>{abs}</span>
-  }
-
-  function ageLabel(isoOrLocale: string): string {
-    if (!isoOrLocale) return ""
-    try {
-      // Coba parse sebagai timestamp number (dari cached_at)
-      const ts = typeof isoOrLocale === "number" ? isoOrLocale : Date.parse(isoOrLocale)
-      if (isNaN(ts)) return isoOrLocale
-      const mins = Math.round((Date.now() - ts) / 60000)
-      if (mins < 1)   return "baru saja"
-      if (mins < 60)  return mins + " menit lalu"
-      const h = Math.floor(mins / 60)
-      const m = mins % 60
-      if (h < 24) return h + " jam" + (m > 0 ? " " + m + " menit" : "") + " lalu"
-      return Math.floor(h / 24) + " hari lalu"
-    } catch { return isoOrLocale }
   }
 
   function CheckRow(props: { done: boolean; text: string; badge: string; badgeColor: string; badgeBg: string; canClick: boolean; onClick: () => void; carryDate?: string }) {
@@ -1171,7 +1181,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-            <PlanDstTable/>
+            <PlanDstTable loading={planDstLoading} data={planDstData} factory={planDstFactory} search={planDstSearch} setSearch={setPlanDstSearch}/>
 
             {/* -- Divider antar section -- */}
             <div style={{ height:1, background:"#c8e6c9", margin:"20px 0" }}/>
@@ -1196,7 +1206,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-            <PlanSewTable/>
+            <PlanSewTable loading={planSewLoading} data={planSewData} factory={planSewFactory} search={planSewSearch} setSearch={setPlanSewSearch}/>
           </div>
         )}
 
