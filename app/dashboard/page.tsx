@@ -151,7 +151,7 @@ function PlanSewTable(props: PlanTableProps) {
     return Object.assign({
       position:"sticky" as const, left:col.l, zIndex:1,
       background:bg, padding:"5px 8px",
-      borderBottom:"0.5px solid #e0ece0",
+      borderBottom:"0.5px solid #cfe0cc",
       borderRight: i===6 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
       boxShadow: i===6 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
       whiteSpace:"nowrap" as const, minWidth:col.w,
@@ -223,7 +223,7 @@ function PlanSewTable(props: PlanTableProps) {
                       const val    = row.dates[d]
                       const cellBg = currWeek.has(d) ? bgCr : bg
                       return (
-                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
+                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
                           {val === "F"
                             ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
                             : (val !== "" && val !== undefined && val !== null)
@@ -313,7 +313,7 @@ function PlanDstTable(props: PlanTableProps) {
     return Object.assign({
       position:"sticky" as const, left:col.l, zIndex:5,
       background:bg, padding:"5px 8px",
-      borderBottom:"0.5px solid #e0ece0",
+      borderBottom:"0.5px solid #cfe0cc",
       borderRight: i===8 ? "3px solid #4caf50" : "0.5px solid #c8e6c9",
       boxShadow: i===8 ? "2px 0 4px rgba(0,0,0,.08)" : "none",
       whiteSpace:"nowrap" as const, boxSizing:"border-box" as const,
@@ -397,7 +397,7 @@ function PlanDstTable(props: PlanTableProps) {
                       const val    = row.dates[d]
                       const cellBg = currWeek.has(d) ? bgCr : bg
                       return (
-                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #e0ece0", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
+                        <td key={d} style={{ padding:"5px 8px", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.25)", background:cellBg, textAlign:"center", whiteSpace:"nowrap", fontSize:10 }}>
                           {val === "F"
                             ? <span style={{ color:C.red, fontWeight:700 }}>F</span>
                             : (val !== "" && val !== undefined && val !== null)
@@ -1410,20 +1410,20 @@ export default function DashboardPage() {
                           const weekSep = prev && prev.week !== r.week
                           return (
                             <tr key={i} style={{ borderTop: weekSep ? "2px solid #a5d6a7" : "none" }}>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.export_date}</td>
-                              <td style={{ background:wc.hl, padding:"5px 7px", textAlign:"center", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontWeight:500, color:C.gdark, fontSize:10 }}>W{r.week}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", color:C.blue, fontSize:10 }}>{r.spo}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", fontSize:10 }} title={r.style}>{r.style}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.buyer}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.dest_country}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment ? Number(r.qty_shipment).toLocaleString("en-US") : ""}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.shipped ? Number(r.shipped).toLocaleString("en-US") : ""}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_dst)}</td>
-                              <td style={{ background:"#e1bee7", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_glove)}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment2 ? Number(r.qty_shipment2).toLocaleString("en-US") : ""}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_env)}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_inner)}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid var(--border)", fontSize:10 }}>{fmtN(r.kk_carton)}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.export_date}</td>
+                              <td style={{ background:wc.hl, padding:"5px 7px", textAlign:"center", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontWeight:500, color:C.gdark, fontSize:10 }}>W{r.week}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", color:C.blue, fontSize:10 }}>{r.spo}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", fontSize:10 }} title={r.style}>{r.style}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.buyer}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.dest_country}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment ? Number(r.qty_shipment).toLocaleString("en-US") : ""}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.shipped ? Number(r.shipped).toLocaleString("en-US") : ""}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_dst)}</td>
+                              <td style={{ background:"#e1bee7", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_glove)}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment2 ? Number(r.qty_shipment2).toLocaleString("en-US") : ""}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_env)}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_inner)}</td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{fmtN(r.kk_carton)}</td>
                             </tr>
                           )
                         })}
@@ -1512,7 +1512,7 @@ export default function DashboardPage() {
                   }
                 } else { n = v }
                 if (isNaN(n)) return null
-                if (n === 0) return <span style={{color:"var(--text-muted)"}}>0</span>
+                if (n === 0) return <span style={{color:C.tx3}}>0</span>
                 const abs = Math.abs(n).toLocaleString("en-US")
                 if (n < 0) return <span style={{color:C.red,fontWeight:500}}>({abs})</span>
                 return <span>{abs}</span>
@@ -1567,7 +1567,7 @@ export default function DashboardPage() {
                 const base: any = {
                   zIndex: isFr ? 5 : 0,
                   background:bg, padding:"4px 6px",
-                  borderBottom:"0.5px solid rgba(0,0,0,.06)",
+                  borderBottom:"0.5px solid #cfe0cc",
                   borderRight: isSep ? "3px solid #a5d6a7" : "0.5px solid rgba(180,220,180,.2)",
                   boxShadow: isSep ? "2px 0 4px rgba(0,0,0,.06)" : "none",
                   whiteSpace:"nowrap" as const, minWidth:col.w, textAlign:col.a as any,
@@ -1576,6 +1576,12 @@ export default function DashboardPage() {
                 if (isFr) { base.position = "sticky" as const; base.left = col.l }
                 return base
               }
+
+              // Warna tema per Factory (Fact A/F/K/dst), sama seperti pembeda Week di Shipment
+              const FACT_COLORS: Record<string, string> = {}
+              const FACT_PALETTE = ["#e8f5e9","#e3f2fd","#fff3e0","#f3e5f5","#e0f7fa","#fce4ec"]
+              const allFacts: string[] = matSetData.facts ?? []
+              allFacts.forEach(function(f: string, i: number) { FACT_COLORS[f] = FACT_PALETTE[i % FACT_PALETTE.length] })
 
               // Warna header per kolom scroll (Cutoff DST, Saldo dll)
               const SCROLL_HEADER_BG = ["#5c3d00","#1a4d1a","#1a4d1a","#1a3d5c","#1a4d1a","#1a3d1a"]
@@ -1696,7 +1702,7 @@ export default function DashboardPage() {
                           </tr>
                         )}
                         {dataRows.map(function(row:any, ri:number) {
-                          const bg = ri%2===0?"#fff":"#f9fafb"
+                          const bg = FACT_COLORS[row.fact] ?? (ri%2===0?"#fff":"#f9fafb")
                           return (
                             <tr key={ri}>
                               {FR.map(function(col:any, ci:number) {
@@ -1739,7 +1745,7 @@ export default function DashboardPage() {
                                       padding:"4px 6px", fontSize:10, textAlign:"right" as const,
                                       whiteSpace:"nowrap" as const,
                                       background:bgC,
-                                      borderBottom:"0.5px solid rgba(0,0,0,.06)",
+                                      borderBottom:"0.5px solid #cfe0cc",
                                       borderRight: ki===3 ? "2px solid #c8e6c9" : "0.5px solid rgba(180,220,180,.2)",
                                       color: nv<0 ? C.red : "inherit",
                                     }}>
@@ -1754,8 +1760,13 @@ export default function DashboardPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap" }}>
+                  <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
                     <span><span style={{display:"inline-block",width:10,height:10,background:"#e8f5e9",border:"0.5px solid #a5d6a7",borderRadius:2,verticalAlign:"middle",marginRight:3}}></span>Baris total kumulatif Fact</span>
+                    {allFacts.map(function(f: string) {
+                      return (
+                        <span key={f}><span style={{display:"inline-block",width:10,height:10,background:FACT_COLORS[f],border:"0.5px solid #b0c8ae",borderRadius:2,verticalAlign:"middle",marginRight:3}}></span>Fact {f}</span>
+                      )
+                    })}
                     <span style={{color:C.red}}>({"{"}angka{"}"})&nbsp;</span><span>= negatif</span>
                     <span style={{marginLeft:"auto"}}>Freeze s/d kolom R (PCS IN SET) &bull; Scroll kanan untuk semua tanggal</span>
                     {matSetData.fetched_epoch && <span>Update: {ageLabel(matSetData.fetched_epoch)}</span>}
