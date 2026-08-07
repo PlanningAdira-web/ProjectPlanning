@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "todo"|"vis"|"plandst"|"plansew"|"shipment"|"matset"|"sim"|"ai"
+type Page  = "todo"|"vis"|"plandst"|"plansew"|"kalender"|"shipment"|"matset"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -83,16 +83,66 @@ function ageLabel(isoOrLocale: string): string {
   } catch { return isoOrLocale }
 }
 
+function parseHeaderDate(d: string): Date | null {
+  if (!d) return null
+  const parts = d.trim().split("-")
+  if (parts.length < 3) return null
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const day  = parseInt(parts[0], 10)
+  const mIdx = months.indexOf(parts[1])
+  let   yr   = parseInt(parts[2], 10)
+  if (isNaN(day) || mIdx < 0 || isNaN(yr)) return null
+  if (yr < 100) yr += 2000
+  return new Date(yr, mIdx, day)
+}
+
+function inDateRange(d: string, fromISO: string, toISO: string) {
+  if (!fromISO && !toISO) return true
+  const dt = parseHeaderDate(d)
+  if (!dt) return true // format tak dikenali, jangan disembunyikan
+  if (fromISO) {
+    const f = new Date(fromISO + "T00:00:00")
+    if (dt < f) return false
+  }
+  if (toISO) {
+    const t = new Date(toISO + "T00:00:00")
+    if (dt > t) return false
+  }
+  return true
+}
+
+function DateRangeFilter(props: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, flexWrap:"wrap" }}>
+      <span style={{ fontSize:10, color:C.tx3, fontWeight:500 }}>Filter Tanggal:</span>
+      <input type="date" value={props.from} onChange={function(e) { props.setFrom(e.target.value) }}
+        style={{ fontSize:11, padding:"5px 8px", border:"0.5px solid #c8e6c9", borderRadius:6, outline:"none", color:C.txt }}/>
+      <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
+      <input type="date" value={props.to} onChange={function(e) { props.setTo(e.target.value) }}
+        style={{ fontSize:11, padding:"5px 8px", border:"0.5px solid #c8e6c9", borderRadius:6, outline:"none", color:C.txt }}/>
+      {(props.from !== "" || props.to !== "") && (
+        <button onClick={function() { props.setFrom(""); props.setTo("") }}
+          style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+          Reset
+        </button>
+      )}
+      <span style={{ fontSize:9, color:C.tx3, fontStyle:"italic" }}>Berlaku untuk semua menu (Planning, Material, Shipment)</span>
+    </div>
+  )
+}
+
 type PlanTableProps = {
   loading: boolean
   data: any
   factory: string
   search: string
   setSearch: (v: string) => void
+  dateFrom: string
+  dateTo: string
 }
 
 function PlanSewTable(props: PlanTableProps) {
-  const { loading, data, factory, search, setSearch } = props
+  const { loading, data, factory, search, setSearch, dateFrom, dateTo } = props
   if (loading) return (
     <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
       Memuat data dari sheet Plan SEW...
@@ -104,7 +154,7 @@ function PlanSewTable(props: PlanTableProps) {
     </div>
   )
   const rows: any[]    = (data.rows[factory] ?? []).filter(function(r: any) { return matchSearch(r, search) })
-  const dates: string[]= data.date_headers ?? []
+  const dates: string[]= (data.date_headers ?? []).filter(function(d: string) { return inDateRange(d, dateFrom, dateTo) })
   const today          = new Date()
   const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
 
@@ -253,7 +303,7 @@ function PlanSewTable(props: PlanTableProps) {
 }
 
 function PlanDstTable(props: PlanTableProps) {
-  const { loading, data, factory, search, setSearch } = props
+  const { loading, data, factory, search, setSearch, dateFrom, dateTo } = props
   if (loading) return (
     <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
       Memuat data dari sheet Plan DST...
@@ -265,7 +315,7 @@ function PlanDstTable(props: PlanTableProps) {
     </div>
   )
   const rows: any[]    = (data.rows[factory] ?? []).filter(function(r: any) { return matchSearch(r, search) })
-  const dates: string[]= data.date_headers ?? []
+  const dates: string[]= (data.date_headers ?? []).filter(function(d: string) { return inDateRange(d, dateFrom, dateTo) })
   const today          = new Date()
   const todayWIB       = new Date(today.getTime() + 7 * 60 * 60 * 1000)
 
@@ -428,6 +478,117 @@ function PlanDstTable(props: PlanTableProps) {
   )
 }
 
+type KalenderProps = {
+  loading: boolean
+  data: any
+  factory: string
+  search: string
+  setSearch: (v: string) => void
+}
+
+function KalenderTable(props: KalenderProps) {
+  const { loading, data, factory, search, setSearch } = props
+  if (loading) return (
+    <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+      Memuat data dari sheet Kalender Planning...
+    </div>
+  )
+  if (!data) return (
+    <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+      Gagal memuat data. Pastikan sheet Kalender Planning tersedia.
+    </div>
+  )
+
+  const allLines: string[] = data.lines[factory] ?? []
+  const weeks: string[] = data.weeks ?? []
+  const cellsForFactory = data.cells[factory] ?? {}
+
+  // Kalau search mengetik nama buyer, tetap tampilkan semua line yang punya baris cocok di minggu manapun
+  const searchedLines = search
+    ? allLines.filter(function(l: string) {
+        return weeks.some(function(w: string) {
+          const c = cellsForFactory[w]?.[l]
+          return c && matchSearch({ line:l, buyer:c.buyer }, search)
+        })
+      })
+    : allLines
+
+  const labelColW = 130
+  const lineColW  = 190
+
+  const th: React.CSSProperties = {
+    position:"sticky", top:0, background:C.gdark, color:"#fff", padding:"6px 10px",
+    fontWeight:500, whiteSpace:"nowrap", textAlign:"left", zIndex:2,
+    borderRight:"0.5px solid rgba(255,255,255,.15)", borderBottom:"1px solid rgba(255,255,255,.2)",
+  }
+
+  return (
+    <div>
+      <SearchBox value={search} onChange={setSearch} placeholder="Cari line atau buyer..." resultCount={searchedLines.length}/>
+      {searchedLines.length === 0 ? (
+        <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+          Tidak ada line/buyer yang cocok dengan pencarian "{search}".
+        </div>
+      ) : (
+      <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 200px)" }}>
+        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:11, minWidth:"max-content" }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, position:"sticky", left:0, top:0, zIndex:11, minWidth:labelColW, background:"#1b4d24", borderRight:"2px solid rgba(255,255,255,.35)" }}>
+                Minggu / Line
+              </th>
+              {searchedLines.map(function(l: string) {
+                return <th key={l} style={{ ...th, minWidth:lineColW }}>{"Line " + l}</th>
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map(function(w: string, wi: number) {
+              const bg = wi % 2 === 0 ? "#e8f5e9" : "#fff"
+              return (
+                <tr key={w}>
+                  <td style={{
+                    position:"sticky", left:0, zIndex:1, background:bg, padding:"8px 10px",
+                    borderRight:"2px solid #4caf50", borderBottom:"0.5px solid #cfe0cc", minWidth:labelColW,
+                  }}>
+                    <div style={{ fontWeight:600, color:C.gdark }}>Minggu {w}</div>
+                  </td>
+                  {searchedLines.map(function(l: string) {
+                    const c = cellsForFactory[w]?.[l]
+                    return (
+                      <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
+                        {c ? (
+                          <>
+                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
+                            <div style={{ fontWeight:500, marginBottom:4 }}>{c.jk_normal} jam</div>
+                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
+                            <div style={{ fontWeight:500, marginBottom:4, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
+                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
+                            <div style={{ fontWeight:500, marginBottom:4 }}>{c.buyer || "-"}</div>
+                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty</div>
+                            <div style={{ fontWeight:600, color:C.gdark }}>{c.qty.toLocaleString("en-US")} pcs</div>
+                          </>
+                        ) : (
+                          <span style={{ color:C.tx3, fontSize:10 }}>-</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      )}
+      <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+        <span>Freeze kolom Minggu / Line di kiri</span>
+        {data?.fetched_epoch && <span style={{ marginLeft:"auto" }}>Update: {ageLabel(data.fetched_epoch)}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [page,       setPage]       = useState<Page>("todo")
@@ -444,10 +605,16 @@ export default function DashboardPage() {
   const [planDstFactory,setPlanDstFactory]= useState("K")
   const [planDstLoading,setPlanDstLoading]= useState(false)
   const [planDstSearch, setPlanDstSearch] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo,   setDateTo]   = useState("")
   const [planSewData,   setPlanSewData]   = useState<any>(null)
   const [planSewFactory,setPlanSewFactory]= useState("K")
   const [planSewLoading,setPlanSewLoading]= useState(false)
   const [planSewSearch, setPlanSewSearch] = useState("")
+  const [kalenderData,   setKalenderData]   = useState<any>(null)
+  const [kalenderLoading,setKalenderLoading]= useState(false)
+  const [kalenderFactory,setKalenderFactory]= useState("K")
+  const [kalenderSearch, setKalenderSearch] = useState("")
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
   const [shipmentSearch, setShipmentSearch]  = useState("")
@@ -628,6 +795,17 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setMatSetLoading(false) })
   }, [page, matSetData])
+
+  useEffect(function() {
+    if (page !== "kalender") return
+    if (kalenderData) return
+    setKalenderLoading(true)
+    fetch("/api/kalender-planning")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setKalenderData(d.data) })
+      .catch(function() {})
+      .finally(function() { setKalenderLoading(false) })
+  }, [page, kalenderData])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -927,6 +1105,7 @@ export default function DashboardPage() {
           {([
             ["todo","To-Do & Concern"],
             ["plandst","Planning"],
+            ["kalender","Kalender Planning"],
             ["matset","Material"],
             ["shipment","Shipment"],
             ["sim","Planning Simulation"],
@@ -1163,6 +1342,8 @@ export default function DashboardPage() {
         {/* == PLANNING (Distribusi di atas, Sewing di bawah) == */}
         {page==="plandst" && (
           <div>
+            <DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo}/>
+
             {/* -- Planning Distribusi -- */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
               <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Planning Distribusi - Plan DST</span>
@@ -1183,7 +1364,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-            <PlanDstTable loading={planDstLoading} data={planDstData} factory={planDstFactory} search={planDstSearch} setSearch={setPlanDstSearch}/>
+            <PlanDstTable loading={planDstLoading} data={planDstData} factory={planDstFactory} search={planDstSearch} setSearch={setPlanDstSearch} dateFrom={dateFrom} dateTo={dateTo}/>
 
             {/* -- Divider antar section -- */}
             <div style={{ height:1, background:"#c8e6c9", margin:"20px 0" }}/>
@@ -1208,7 +1389,33 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-            <PlanSewTable loading={planSewLoading} data={planSewData} factory={planSewFactory} search={planSewSearch} setSearch={setPlanSewSearch}/>
+            <PlanSewTable loading={planSewLoading} data={planSewData} factory={planSewFactory} search={planSewSearch} setSearch={setPlanSewSearch} dateFrom={dateFrom} dateTo={dateTo}/>
+          </div>
+        )}
+
+        {/* == KALENDER PLANNING == */}
+        {page==="kalender" && (
+          <div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Kalender Planning</span>
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                {kalenderData?.factories?.map(function(f: string) {
+                  return (
+                    <button key={f} onClick={function() { setKalenderFactory(f) }}
+                      style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
+                        background:kalenderFactory===f?C.gdark:"#fff",
+                        color:kalenderFactory===f?"#fff":C.tx2, cursor:"pointer" }}>
+                      Line {f}
+                    </button>
+                  )
+                })}
+                <button onClick={function() { setKalenderData(null) }}
+                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+            <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch}/>
           </div>
         )}
 
@@ -1311,9 +1518,12 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo}/>
+
             <SearchBox value={shipmentSearch} onChange={setShipmentSearch} placeholder="Cari SPO, style, line, atau buyer..." resultCount={shipmentData ? (shipmentData.rows ?? []).filter(function(r: any) {
               if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
               if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
+              if (!inDateRange(r.export_date, dateFrom, dateTo)) return false
               return matchSearch(r, shipmentSearch)
             }).length : undefined}/>
 
@@ -1347,6 +1557,7 @@ export default function DashboardPage() {
                 if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
                 if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
                 if (!matchSearch(r, shipmentSearch)) return false
+                if (!inDateRange(r.export_date, dateFrom, dateTo)) return false
                 return true
               })
 
@@ -1477,6 +1688,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo}/>
+
             <SearchBox value={matSetSearch} onChange={setMatSetSearch} placeholder="Cari SPO atau style..." resultCount={matSetData ? (matSetData.rows ?? []).filter(function(r:any) {
               if (r.is_total) return false
               if (matSetFact !== "all" && r.fact !== matSetFact) return false
@@ -1490,7 +1703,7 @@ export default function DashboardPage() {
             )}
 
             {!matSetLoading && matSetData && (function() {
-              const dates: string[] = matSetData.date_headers ?? []
+              const dates: string[] = (matSetData.date_headers ?? []).filter(function(d: string) { return inDateRange(d, dateFrom, dateTo) })
 
               const totalRows = (matSetData.rows ?? []).filter(function(r:any) { return r.is_total })
               const dataRows  = (matSetData.rows ?? []).filter(function(r:any) {
