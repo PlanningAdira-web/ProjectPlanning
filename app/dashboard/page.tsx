@@ -508,7 +508,7 @@ function KalenderTable(props: KalenderProps) {
     ? allLines.filter(function(l: string) {
         return weeks.some(function(w: string) {
           const c = cellsForFactory[w]?.[l]
-          return c && matchSearch({ line:l, buyer:c.buyer }, search)
+          return c && matchSearch({ line:l, buyer:c.buyers.join(" ") }, search)
         })
       })
     : allLines
@@ -564,9 +564,9 @@ function KalenderTable(props: KalenderProps) {
                             <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
                             <div style={{ fontWeight:500, marginBottom:4, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
                             <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
-                            <div style={{ fontWeight:500, marginBottom:4 }}>{c.buyer || "-"}</div>
+                            <div style={{ fontWeight:500, marginBottom:4 }}>{c.buyers.length ? c.buyers.join(", ") : "-"}</div>
                             <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty</div>
-                            <div style={{ fontWeight:600, color:C.gdark }}>{c.qty.toLocaleString("en-US")} pcs</div>
+                            <div style={{ fontWeight:600, color:C.gdark }}>{c.qtys.map(function(q: number) { return q.toLocaleString("en-US") }).join(" pcs, ") + " pcs"}</div>
                           </>
                         ) : (
                           <span style={{ color:C.tx3, fontSize:10 }}>-</span>

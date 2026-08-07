@@ -7,8 +7,8 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 export type KalenderCell = {
-  buyer     : string
-  qty       : number
+  buyers    : string[]
+  qtys      : number[]
   jk_total  : number
   jk_normal : number
   jk_lembur : number
@@ -85,17 +85,30 @@ async function fetchKalenderPlanning(): Promise<KalenderData> {
 
     const fact  = String(row[iFactory] ?? "").trim().toUpperCase() || factoryOf(line)
     const buyer = String(row[iBuyer] ?? "").trim()
-    const cell: KalenderCell = {
-      buyer,
-      qty      : numThousands(row[iQty]),
-      jk_total : numDecimal(row[iJKT]),
-      jk_normal: numDecimal(row[iJKN]),
-      jk_lembur: numDecimal(row[iJKL]),
-    }
+    const qty       = numThousands(row[iQty])
+    const jk_total  = numDecimal(row[iJKT])
+    const jk_normal = numDecimal(row[iJKN])
+    const jk_lembur = numDecimal(row[iJKL])
 
     if (!cells[fact]) cells[fact] = {}
     if (!cells[fact][week]) cells[fact][week] = {}
-    cells[fact][week][line] = cell
+
+    const existing = cells[fact][week][line]
+    if (existing) {
+      // Baris tambahan untuk Week+Line+Factory yang sama -> gabung buyer & qty,
+      // JK Normal/Lembur/Total cukup diisi sekali (ambil nilai non-nol pertama)
+      if (buyer) existing.buyers.push(buyer)
+      existing.qtys.push(qty)
+      if (!existing.jk_total  && jk_total)  existing.jk_total  = jk_total
+      if (!existing.jk_normal && jk_normal) existing.jk_normal = jk_normal
+      if (!existing.jk_lembur && jk_lembur) existing.jk_lembur = jk_lembur
+    } else {
+      cells[fact][week][line] = {
+        buyers   : buyer ? [buyer] : [],
+        qtys     : [qty],
+        jk_total, jk_normal, jk_lembur,
+      }
+    }
 
     if (!linesByFactory[fact]) linesByFactory[fact] = new Set()
     linesByFactory[fact].add(line)
