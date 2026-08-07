@@ -36,8 +36,16 @@ function getAuth() {
   })
 }
 
-function num(v: any): number {
+// Untuk kolom Qty: titik dianggap pemisah ribuan (16.647 -> 16647)
+function numThousands(v: any): number {
   const n = parseFloat(String(v ?? "0").replace(/\./g, "").replace(",", "."))
+  return isNaN(n) ? 0 : n
+}
+
+// Untuk kolom Jam Kerja: titik dianggap titik desimal asli (9.5 -> 9.5 jam)
+function numDecimal(v: any): number {
+  const s = String(v ?? "0").trim().replace(",", ".")
+  const n = parseFloat(s)
   return isNaN(n) ? 0 : n
 }
 
@@ -79,10 +87,10 @@ async function fetchKalenderPlanning(): Promise<KalenderData> {
     const buyer = String(row[iBuyer] ?? "").trim()
     const cell: KalenderCell = {
       buyer,
-      qty      : num(row[iQty]),
-      jk_total : num(row[iJKT]),
-      jk_normal: num(row[iJKN]),
-      jk_lembur: num(row[iJKL]),
+      qty      : numThousands(row[iQty]),
+      jk_total : numDecimal(row[iJKT]),
+      jk_normal: numDecimal(row[iJKN]),
+      jk_lembur: numDecimal(row[iJKL]),
     }
 
     if (!cells[fact]) cells[fact] = {}
