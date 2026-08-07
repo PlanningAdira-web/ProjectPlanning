@@ -73,7 +73,8 @@ async function fetchKalenderPlanning(): Promise<KalenderData> {
 
   const cells: KalenderData["cells"] = {}
   const linesByFactory: Record<string, Set<string>> = {}
-  const weekSet = new Set<string>()
+  const weekOrder: string[] = []
+  const weekSeen = new Set<string>()
 
   for (let r = 1; r < raw.length; r++) {
     const row = raw[r]
@@ -112,7 +113,7 @@ async function fetchKalenderPlanning(): Promise<KalenderData> {
 
     if (!linesByFactory[fact]) linesByFactory[fact] = new Set()
     linesByFactory[fact].add(line)
-    weekSet.add(week)
+    if (!weekSeen.has(week)) { weekSeen.add(week); weekOrder.push(week) }
   }
 
   const factories = Object.keys(cells).sort()
@@ -122,7 +123,7 @@ async function fetchKalenderPlanning(): Promise<KalenderData> {
       return a.localeCompare(b, undefined, { numeric:true })
     })
   }
-  const weeks = Array.from(weekSet).sort(function(a, b) { return parseInt(a) - parseInt(b) })
+  const weeks = weekOrder
 
   const now    = Date.now()
   const wibStr = new Date(now + 7 * 60 * 60 * 1000).toLocaleString("id-ID", { timeZone:"UTC" })
