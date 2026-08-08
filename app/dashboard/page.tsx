@@ -478,6 +478,55 @@ function PlanDstTable(props: PlanTableProps) {
   )
 }
 
+// Warna tetap untuk buyer yang sudah dikenal; buyer lain dapat warna dari palet fallback (konsisten per nama)
+const BUYER_FIXED_COLORS: Record<string, string> = {
+  "Callaway": "#4285F4",
+  "TMAG"    : "#B39DDB",
+  "Bating"  : "#F4A460",
+}
+const BUYER_FALLBACK_PALETTE = ["#FDD835","#26A69A","#EF5350","#8D6E63","#78909C","#EC407A","#7E57C2","#26C6DA","#9CCC65"]
+
+function buildBuyerColorMap(data: any): Record<string, string> {
+  const map: Record<string, string> = {}
+  let idx = 0
+  Object.keys(data?.cells ?? {}).forEach(function(fact) {
+    Object.keys(data.cells[fact]).forEach(function(week) {
+      Object.keys(data.cells[fact][week]).forEach(function(line) {
+        const c = data.cells[fact][week][line]
+        ;(c.buyers ?? []).forEach(function(b: string) {
+          if (map[b]) return
+          map[b] = BUYER_FIXED_COLORS[b] ?? BUYER_FALLBACK_PALETTE[idx % BUYER_FALLBACK_PALETTE.length]
+          if (!BUYER_FIXED_COLORS[b]) idx++
+        })
+      })
+    })
+  })
+  return map
+}
+
+function buyerBreakdown(c: { buyers: string[]; qtys: number[] }) {
+  const countMap: Record<string, number> = {}
+  const qtyMap: Record<string, number> = {}
+  c.buyers.forEach(function(b: string, i: number) {
+    countMap[b] = (countMap[b] ?? 0) + 1
+    qtyMap[b]   = (qtyMap[b]   ?? 0) + (c.qtys[i] ?? 0)
+  })
+  const uniqueBuyers = Object.keys(countMap)
+  const totalCount = c.buyers.length
+  const totalQty   = c.qtys.reduce(function(a: number, b: number) { return a + b }, 0)
+  return { countMap, qtyMap, uniqueBuyers, totalCount, totalQty }
+}
+
+function DistBar(props: { segments: { color: string; pct: number }[] }) {
+  return (
+    <div style={{ display:"flex", width:"100%", height:10, borderRadius:4, overflow:"hidden", background:"#eee" }}>
+      {props.segments.map(function(s, i) {
+        return <div key={i} style={{ width: s.pct + "%", background: s.color }}/>
+      })}
+    </div>
+  )
+}
+
 type KalenderProps = {
   loading: boolean
   data: any
@@ -502,6 +551,14 @@ function KalenderTable(props: KalenderProps) {
   const allLines: string[] = data.lines[factory] ?? []
   const weeks: string[] = data.weeks ?? []
   const cellsForFactory = data.cells[factory] ?? {}
+  const buyerColors = buildBuyerColorMap(data)
+
+  // Legend hanya untuk buyer yang muncul di Factory yang sedang dipilih
+  const legendBuyers = Array.from(new Set(
+    Object.values(cellsForFactory).flatMap(function(byLine: any) {
+      return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
+    })
+  )) as string[]
 
   // Kalau search mengetik nama buyer, tetap tampilkan semua line yang punya baris cocok di minggu manapun
   const searchedLines = search
@@ -525,6 +582,20 @@ function KalenderTable(props: KalenderProps) {
   return (
     <div>
       <SearchBox value={search} onChange={setSearch} placeholder="Cari line atau buyer..." resultCount={searchedLines.length}/>
+
+      {legendBuyers.length > 1 && (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:10, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
+          {legendBuyers.map(function(b: string) {
+            return (
+              <span key={b} style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:C.tx2 }}>
+                <span style={{ width:10, height:10, borderRadius:2, background:buyerColors[b] }}/>
+                {b}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
       {searchedLines.length === 0 ? (
         <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
           Tidak ada line/buyer yang cocok dengan pencarian "{search}".
@@ -555,21 +626,38 @@ function KalenderTable(props: KalenderProps) {
                   </td>
                   {searchedLines.map(function(l: string) {
                     const c = cellsForFactory[w]?.[l]
+                    if (!c) {
+                      return (
+                        <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
+                          <span style={{ color:C.tx3, fontSize:10 }}>-</span>
+                        </td>
+                      )
+                    }
+                    const { countMap, qtyMap, uniqueBuyers, totalCount, totalQty } = buyerBreakdown(c)
+                    const countSegs = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct: (countMap[b] / totalCount) * 100 } })
+                    const qtySegs   = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct: totalQty > 0 ? (qtyMap[b] / totalQty) * 100 : 0 } })
                     return (
                       <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
-                        {c ? (
+                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
+                        <div style={{ fontWeight:500, marginBottom:4 }}>{c.jk_normal} jam</div>
+                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
+                        <div style={{ fontWeight:500, marginBottom:6, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
+
+                        {uniqueBuyers.length <= 1 ? (
                           <>
-                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
-                            <div style={{ fontWeight:500, marginBottom:4 }}>{c.jk_normal} jam</div>
-                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
-                            <div style={{ fontWeight:500, marginBottom:4, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
                             <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
-                            <div style={{ fontWeight:500, marginBottom:4 }}>{c.buyers.length ? c.buyers.join(", ") : "-"}</div>
+                            <div style={{ fontWeight:500, marginBottom:4 }}>{uniqueBuyers[0] ?? "-"}</div>
                             <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty</div>
-                            <div style={{ fontWeight:600, color:C.gdark }}>{c.qtys.map(function(q: number) { return q.toLocaleString("en-US") }).join(" pcs, ") + " pcs"}</div>
+                            <div style={{ fontWeight:600, color:C.gdark }}>{totalQty.toLocaleString("en-US")} pcs</div>
                           </>
                         ) : (
-                          <span style={{ color:C.tx3, fontSize:10 }}>-</span>
+                          <>
+                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:2 }}>Buyer Distribution</div>
+                            <DistBar segments={countSegs}/>
+                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginTop:6, marginBottom:2 }}>Qty Distribution</div>
+                            <DistBar segments={qtySegs}/>
+                            <div style={{ fontSize:9, color:C.tx3, marginTop:4 }}>Total Qty: {totalQty.toLocaleString("en-US")} pcs</div>
+                          </>
                         )}
                       </td>
                     )
