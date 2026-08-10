@@ -530,6 +530,86 @@ function DistBar(props: { segments: { color: string; pct: number; label: string 
   )
 }
 
+// Cari cell untuk week+line, cari di semua Factory (atau daftar Factory terbatas kalau diisi restrictFactories)
+function lookupCell(data: any, week: string, line: string, restrictFactories?: string[]): { cell: any; fact: string } | null {
+  const facts: string[] = restrictFactories ?? (data.factories ?? [])
+  for (const f of facts) {
+    const c = data.cells[f]?.[week]?.[line]
+    if (c) return { cell: c, fact: f }
+  }
+  return null
+}
+
+type ExportProps = {
+  data: any
+  weeks: string[]
+  lines: string[]
+  restrictFactories?: string[]
+  showFactBadge: boolean
+}
+
+// Tabel ringkas khusus untuk di-export jadi JPG: font & padding lebih kecil, info tetap lengkap
+function ExportTable(props: ExportProps) {
+  const { data, weeks, lines, restrictFactories, showFactBadge } = props
+  const buyerColors = buildBuyerColorMap(data)
+  const labelColW = 78
+  const lineColW  = 128
+
+  return (
+    <div style={{ background:"#fff", padding:12, fontFamily:"system-ui, sans-serif" }}>
+      <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:9 }}>
+        <thead>
+          <tr>
+            <th style={{ background:"#1b4d24", color:"#fff", padding:"4px 6px", textAlign:"left", minWidth:labelColW }}>Minggu / Line</th>
+            {lines.map(function(l: string) {
+              return <th key={l} style={{ background:C.gdark, color:"#fff", padding:"4px 6px", textAlign:"left", minWidth:lineColW }}>{"Line " + l}</th>
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {weeks.map(function(w: string, wi: number) {
+            const bg = wi % 2 === 0 ? "#e8f5e9" : "#fff"
+            return (
+              <tr key={w}>
+                <td style={{ background:bg, padding:"4px 6px", fontWeight:600, color:C.gdark, borderBottom:"0.5px solid #cfe0cc", minWidth:labelColW }}>
+                  Minggu {w}
+                </td>
+                {lines.map(function(l: string) {
+                  const found = lookupCell(data, w, l, restrictFactories)
+                  if (!found) {
+                    return <td key={l} style={{ background:bg, padding:"4px 6px", borderBottom:"0.5px solid #cfe0cc", minWidth:lineColW }}><span style={{ color:C.tx3, fontSize:8 }}>-</span></td>
+                  }
+                  const c = found.cell
+                  const { countMap, qtyMap, uniqueBuyers, totalCount, totalQty } = buyerBreakdown(c)
+                  const countSegs = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct:(countMap[b]/totalCount)*100, label:b } })
+                  const qtySegs   = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct: totalQty>0 ? (qtyMap[b]/totalQty)*100 : 0, label:b } })
+                  return (
+                    <td key={l} style={{ background:bg, padding:"4px 6px", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
+                      {showFactBadge && (
+                        <span style={{ display:"inline-block", fontSize:7, fontWeight:600, color:"#fff", background:C.gdark, padding:"0 4px", borderRadius:3, marginBottom:3 }}>
+                          {found.fact}
+                        </span>
+                      )}
+                      <div style={{ fontSize:7, color:C.tx3 }}>JK N/L</div>
+                      <div style={{ fontWeight:500, marginBottom:2, fontSize:8 }}>{c.jk_normal} / {c.jk_lembur > 0 ? c.jk_lembur : 0} jam</div>
+                      <div style={{ fontSize:7, color:C.tx3 }}>BUYER</div>
+                      <div style={{ fontWeight:500, marginBottom:2, fontSize:8 }}>{uniqueBuyers.join(", ") || "-"}</div>
+                      <DistBar segments={countSegs}/>
+                      <div style={{ height:2 }}/>
+                      <DistBar segments={qtySegs}/>
+                      <div style={{ fontSize:7, color:C.tx3, marginTop:2 }}>{totalQty.toLocaleString("en-US")} pcs</div>
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 type KalenderProps = {
   loading: boolean
   data: any
@@ -734,6 +814,15 @@ export default function DashboardPage() {
   const [kalenderLoading,setKalenderLoading]= useState(false)
   const [kalenderFactory,setKalenderFactory]= useState("K")
   const [kalenderSearch, setKalenderSearch] = useState("")
+  const [expShow,     setExpShow]     = useState(false)
+  const [expMode,     setExpMode]     = useState<"line"|"buyer"|"factory">("line")
+  const [expWeekFrom, setExpWeekFrom] = useState("")
+  const [expWeekTo,   setExpWeekTo]   = useState("")
+  const [expLines,    setExpLines]    = useState<string[]>([])
+  const [expBuyers,   setExpBuyers]   = useState<string[]>([])
+  const [expFactories,setExpFactories]= useState<string[]>([])
+  const [expBusy,      setExpBusy]     = useState(false)
+  const exportRef = useRef<HTMLDivElement>(null)
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
   const [shipmentSearch, setShipmentSearch]  = useState("")
@@ -1538,8 +1627,146 @@ export default function DashboardPage() {
                   style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
                   Refresh
                 </button>
+                <button onClick={function() { setExpShow(function(v) { return !v }) }}
+                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:expShow?C.gdark:"#fff", color:expShow?"#fff":C.tx2, cursor:"pointer", fontWeight:500 }}>
+                  Export JPG
+                </button>
               </div>
             </div>
+
+            {expShow && kalenderData && (function() {
+              const allLinesGlobal = (Array.from(new Set(
+                (kalenderData.factories ?? []).flatMap(function(f: string) { return kalenderData.lines[f] ?? [] })
+              )) as string[]).sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
+
+              const allBuyersGlobal = Array.from(new Set(
+                (kalenderData.factories ?? []).flatMap(function(f: string) {
+                  return Object.values(kalenderData.cells[f] ?? {}).flatMap(function(byLine: any) {
+                    return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
+                  })
+                })
+              )) as string[]
+
+              const weekOptions: string[] = kalenderData.weeks ?? []
+              const fromIdx = weekOptions.indexOf(expWeekFrom) >= 0 ? weekOptions.indexOf(expWeekFrom) : 0
+              const toIdx   = weekOptions.indexOf(expWeekTo)   >= 0 ? weekOptions.indexOf(expWeekTo)   : weekOptions.length - 1
+              const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx)
+              const chosenWeeks = weekOptions.slice(lo, hi + 1)
+
+              let exportLines: string[] = []
+              let restrictFactories: string[] | undefined = undefined
+              let showFactBadge = false
+
+              if (expMode === "line") {
+                exportLines = expLines.length ? expLines : allLinesGlobal
+              } else if (expMode === "factory") {
+                const facts = expFactories.length ? expFactories : (kalenderData.factories ?? [])
+                restrictFactories = facts
+                showFactBadge = facts.length > 1
+                exportLines = (Array.from(new Set(facts.flatMap(function(f: string) { return kalenderData.lines[f] ?? [] }))) as string[])
+                  .sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
+              } else {
+                // mode "buyer": cari Line yang punya minimal 1 buyer terpilih di salah satu minggu terpilih
+                const chosenBuyers = expBuyers.length ? expBuyers : allBuyersGlobal
+                exportLines = allLinesGlobal.filter(function(l: string) {
+                  return chosenWeeks.some(function(w: string) {
+                    const found = lookupCell(kalenderData, w, l)
+                    return found && found.cell.buyers.some(function(b: string) { return chosenBuyers.includes(b) })
+                  })
+                })
+                showFactBadge = true
+              }
+
+              function toggleFrom(list: string[], setList: (v: string[]) => void, item: string) {
+                setList(list.includes(item) ? list.filter(function(x) { return x !== item }) : list.concat(item))
+              }
+
+              async function handleDownload() {
+                setExpBusy(true)
+                try {
+                  const html2canvas = (await import("html2canvas")).default
+                  if (!exportRef.current) return
+                  const canvas = await html2canvas(exportRef.current, { backgroundColor:"#ffffff", scale:2 })
+                  const dataUrl = canvas.toDataURL("image/jpeg", 0.92)
+                  const a = document.createElement("a")
+                  const fname = "kalender-planning_" + expMode + "_W" + (chosenWeeks[0] ?? "") + "-W" + (chosenWeeks[chosenWeeks.length-1] ?? "") + ".jpg"
+                  a.href = dataUrl
+                  a.download = fname
+                  a.click()
+                } catch (e) {
+                  alert("Gagal membuat JPG. Coba lagi.")
+                } finally {
+                  setExpBusy(false)
+                }
+              }
+
+              return (
+                <div style={{ background:"#f4f7f3", border:"0.5px solid #c8e6c9", borderRadius:8, padding:12, marginBottom:12 }}>
+                  <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                    {([["line","By Line"],["buyer","By Buyer"],["factory","By Factory"]] as [typeof expMode, string][]).map(function([m, label]) {
+                      return (
+                        <button key={m} onClick={function() { setExpMode(m) }}
+                          style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:expMode===m?C.gdark:"#fff", color:expMode===m?"#fff":C.tx2, cursor:"pointer" }}>
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:4 }}>Rentang Minggu</div>
+                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <select value={expWeekFrom || weekOptions[0] || ""} onChange={function(e) { setExpWeekFrom(e.target.value) }}
+                          style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                          {weekOptions.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                        </select>
+                        <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
+                        <select value={expWeekTo || weekOptions[weekOptions.length-1] || ""} onChange={function(e) { setExpWeekTo(e.target.value) }}
+                          style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                          {weekOptions.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ flex:1, minWidth:220 }}>
+                      <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:4 }}>
+                        {expMode === "line" ? "Pilih Line (kosongkan = semua)" : expMode === "buyer" ? "Pilih Buyer (kosongkan = semua)" : "Pilih Factory (kosongkan = semua)"}
+                      </div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:5, maxHeight:80, overflowY:"auto" }}>
+                        {(expMode === "line" ? allLinesGlobal : expMode === "buyer" ? allBuyersGlobal : (kalenderData.factories ?? [])).map(function(item: string) {
+                          const list  = expMode === "line" ? expLines : expMode === "buyer" ? expBuyers : expFactories
+                          const setFn = expMode === "line" ? setExpLines : expMode === "buyer" ? setExpBuyers : setExpFactories
+                          const active = list.includes(item)
+                          return (
+                            <button key={item} onClick={function() { toggleFrom(list, setFn, item) }}
+                              style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:active?C.gdark:"#fff", color:active?"#fff":C.tx2, cursor:"pointer" }}>
+                              {item}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize:9, color:C.tx3, marginBottom:6 }}>
+                    Preview: {chosenWeeks.length} minggu &times; {exportLines.length} line
+                  </div>
+
+                  <div style={{ overflowX:"auto", border:"0.5px solid #c8e6c9", borderRadius:6, background:"#fff" }}>
+                    <div ref={exportRef}>
+                      <ExportTable data={kalenderData} weeks={chosenWeeks} lines={exportLines} restrictFactories={restrictFactories} showFactBadge={showFactBadge}/>
+                    </div>
+                  </div>
+
+                  <button onClick={handleDownload} disabled={expBusy}
+                    style={{ marginTop:10, fontSize:11, fontWeight:600, padding:"7px 16px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", cursor:expBusy?"not-allowed":"pointer" }}>
+                    {expBusy ? "Membuat JPG..." : "Download JPG"}
+                  </button>
+                </div>
+              )
+            })()}
+
             <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch}/>
           </div>
         )}
