@@ -561,13 +561,19 @@ function KalenderTable(props: KalenderProps) {
 
   const weeks: string[] = data.weeks ?? []
 
-  // Gabungkan cells dari semua Factory kalau mode "Semua Line" dipilih (line diasumsikan unik lintas Factory)
+  // Gabungkan cells dari semua Factory kalau mode "Semua Line" dipilih.
+  // Digabung PER MINGGU (bukan global per-Line) supaya kasus 1 Line pindah Factory
+  // antar-minggu (mis. K49 di Factory F minggu 35, lalu pindah ke Factory K minggu 37) tetap benar,
+  // masing-masing minggu tetap mengacu ke Factory yang sesuai untuk minggu itu.
   const cellsForFactory: Record<string, Record<string, any>> = isAll
     ? allFactories.reduce(function(acc: any, f: string) {
         const byWeek = data.cells[f] ?? {}
         Object.keys(byWeek).forEach(function(w: string) {
           if (!acc[w]) acc[w] = {}
-          Object.assign(acc[w], byWeek[w])
+          Object.keys(byWeek[w]).forEach(function(line: string) {
+            // Tandai Factory asal per cell (dipakai buat badge di mode "Semua Line")
+            acc[w][line] = Object.assign({}, byWeek[w][line], { _fact: f })
+          })
         })
         return acc
       }, {})
@@ -666,6 +672,11 @@ function KalenderTable(props: KalenderProps) {
                     })
                     return (
                       <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
+                        {isAll && c._fact && (
+                          <span style={{ display:"inline-block", fontSize:9, fontWeight:600, color:"#fff", background:C.gdark, padding:"1px 6px", borderRadius:4, marginBottom:5 }}>
+                            Factory {c._fact}
+                          </span>
+                        )}
                         <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
                         <div style={{ fontWeight:500, marginBottom:4 }}>{c.jk_normal} jam</div>
                         <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
