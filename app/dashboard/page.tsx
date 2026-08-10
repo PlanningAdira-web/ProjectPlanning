@@ -478,13 +478,16 @@ function PlanDstTable(props: PlanTableProps) {
   )
 }
 
-// Warna tetap untuk buyer yang sudah dikenal; buyer lain dapat warna dari palet fallback (konsisten per nama)
+// Warna tetap untuk buyer yang sudah dikenal (sama di semua filter Factory); buyer lain dapat warna dari palet fallback
 const BUYER_FIXED_COLORS: Record<string, string> = {
-  "Callaway": "#4285F4",
-  "TMAG"    : "#B39DDB",
-  "Bating"  : "#F4A460",
+  "Callaway"   : "#003f5c",
+  "TMAG"       : "#58508d",
+  "Taylor Made": "#bc5090",
+  "Batting"    : "#ff6361",
+  "Bating"     : "#ff6361", // jaga-jaga kalau penulisan di sheet "Bating" (tanpa dobel t)
+  "Others"     : "#ffa600",
 }
-const BUYER_FALLBACK_PALETTE = ["#FDD835","#26A69A","#EF5350","#8D6E63","#78909C","#EC407A","#7E57C2","#26C6DA","#9CCC65"]
+const BUYER_FALLBACK_PALETTE = ["#FDD835","#26A69A","#8D6E63","#78909C","#EC407A","#7E57C2","#26C6DA","#9CCC65"]
 
 function buildBuyerColorMap(data: any): Record<string, string> {
   const map: Record<string, string> = {}
@@ -548,12 +551,31 @@ function KalenderTable(props: KalenderProps) {
     </div>
   )
 
-  const allLines: string[] = data.lines[factory] ?? []
+  const isAll = factory === "__ALL__"
+  const allFactories: string[] = data.factories ?? []
+
+  const allLines: string[] = isAll
+    ? Array.from(new Set(allFactories.flatMap(function(f: string) { return data.lines[f] ?? [] })))
+        .sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
+    : (data.lines[factory] ?? [])
+
   const weeks: string[] = data.weeks ?? []
-  const cellsForFactory = data.cells[factory] ?? {}
+
+  // Gabungkan cells dari semua Factory kalau mode "Semua Line" dipilih (line diasumsikan unik lintas Factory)
+  const cellsForFactory: Record<string, Record<string, any>> = isAll
+    ? allFactories.reduce(function(acc: any, f: string) {
+        const byWeek = data.cells[f] ?? {}
+        Object.keys(byWeek).forEach(function(w: string) {
+          if (!acc[w]) acc[w] = {}
+          Object.assign(acc[w], byWeek[w])
+        })
+        return acc
+      }, {})
+    : (data.cells[factory] ?? {})
+
   const buyerColors = buildBuyerColorMap(data)
 
-  // Legend hanya untuk buyer yang muncul di Factory yang sedang dipilih
+  // Legend hanya untuk buyer yang muncul di Factory (atau semua Factory) yang sedang dipilih
   const legendBuyers = Array.from(new Set(
     Object.values(cellsForFactory).flatMap(function(byLine: any) {
       return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
@@ -649,22 +671,14 @@ function KalenderTable(props: KalenderProps) {
                         <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
                         <div style={{ fontWeight:500, marginBottom:6, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
 
-                        {uniqueBuyers.length <= 1 ? (
-                          <>
-                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
-                            <div style={{ fontWeight:500, marginBottom:4 }}>{uniqueBuyers[0] ?? "-"}</div>
-                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty</div>
-                            <div style={{ fontWeight:600, color:C.gdark }}>{totalQty.toLocaleString("en-US")} pcs</div>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:2 }}>Buyer Distribution</div>
-                            <DistBar segments={countSegs}/>
-                            <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginTop:6, marginBottom:2 }}>Qty Distribution</div>
-                            <DistBar segments={qtySegs}/>
-                            <div style={{ fontSize:9, color:C.tx3, marginTop:4 }}>Total Qty: {totalQty.toLocaleString("en-US")} pcs</div>
-                          </>
-                        )}
+                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
+                        <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.join(", ") : "-"}</div>
+
+                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:2 }}>Buyer Distribution</div>
+                        <DistBar segments={countSegs}/>
+                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginTop:6, marginBottom:2 }}>Qty Distribution</div>
+                        <DistBar segments={qtySegs}/>
+                        <div style={{ fontSize:9, color:C.tx3, marginTop:4 }}>Total Qty: {totalQty.toLocaleString("en-US")} pcs</div>
                       </td>
                     )
                   })}
@@ -1493,6 +1507,12 @@ export default function DashboardPage() {
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
               <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Kalender Planning</span>
               <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <button onClick={function() { setKalenderFactory("__ALL__") }}
+                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
+                    background:kalenderFactory==="__ALL__"?C.gdark:"#fff",
+                    color:kalenderFactory==="__ALL__"?"#fff":C.tx2, cursor:"pointer", fontWeight:500 }}>
+                  Semua Line
+                </button>
                 {kalenderData?.factories?.map(function(f: string) {
                   return (
                     <button key={f} onClick={function() { setKalenderFactory(f) }}
