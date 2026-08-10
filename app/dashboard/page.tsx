@@ -517,11 +517,11 @@ function buyerBreakdown(c: { buyers: string[]; qtys: number[] }) {
   return { countMap, qtyMap, uniqueBuyers, totalCount, totalQty }
 }
 
-function DistBar(props: { segments: { color: string; pct: number }[] }) {
+function DistBar(props: { segments: { color: string; pct: number; label: string }[] }) {
   return (
     <div style={{ display:"flex", width:"100%", height:10, borderRadius:4, overflow:"hidden", background:"#eee" }}>
       {props.segments.map(function(s, i) {
-        return <div key={i} style={{ width: s.pct + "%", background: s.color }}/>
+        return <div key={i} title={s.label} style={{ width: s.pct + "%", background: s.color, cursor:"help" }}/>
       })}
     </div>
   )
@@ -634,8 +634,14 @@ function KalenderTable(props: KalenderProps) {
                       )
                     }
                     const { countMap, qtyMap, uniqueBuyers, totalCount, totalQty } = buyerBreakdown(c)
-                    const countSegs = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct: (countMap[b] / totalCount) * 100 } })
-                    const qtySegs   = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct: totalQty > 0 ? (qtyMap[b] / totalQty) * 100 : 0 } })
+                    const countSegs = uniqueBuyers.map(function(b: string) {
+                      const pct = (countMap[b] / totalCount) * 100
+                      return { color:buyerColors[b], pct, label: b + ": " + countMap[b] + " order (" + pct.toFixed(0) + "%)" }
+                    })
+                    const qtySegs = uniqueBuyers.map(function(b: string) {
+                      const pct = totalQty > 0 ? (qtyMap[b] / totalQty) * 100 : 0
+                      return { color:buyerColors[b], pct, label: b + ": " + qtyMap[b].toLocaleString("en-US") + " pcs (" + pct.toFixed(0) + "%)" }
+                    })
                     return (
                       <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
                         <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
