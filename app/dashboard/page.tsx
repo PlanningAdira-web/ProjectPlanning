@@ -1691,8 +1691,22 @@ export default function DashboardPage() {
                 setExpBusy(true)
                 try {
                   const html2canvas = (await import("html2canvas")).default
-                  if (!exportRef.current) return
-                  const canvas = await html2canvas(exportRef.current, { backgroundColor:"#ffffff", scale:2 })
+                  const el = exportRef.current
+                  if (!el) return
+                  // Paksa render di lebar & tinggi PENUH konten (bukan cuma area yang kelihatan di layar/viewport),
+                  // supaya makin banyak Line yang dipilih, hasil JPG makin landscape ke samping, tidak terpotong.
+                  const fullW = el.scrollWidth
+                  const fullH = el.scrollHeight
+                  const canvas = await html2canvas(el, {
+                    backgroundColor:"#ffffff",
+                    scale:2,
+                    width: fullW,
+                    height: fullH,
+                    windowWidth: fullW,
+                    windowHeight: fullH,
+                    scrollX: 0,
+                    scrollY: 0,
+                  })
                   const dataUrl = canvas.toDataURL("image/jpeg", 0.92)
                   const a = document.createElement("a")
                   const fname = "kalender-planning_" + expMode + "_W" + (chosenWeeks[0] ?? "") + "-W" + (chosenWeeks[chosenWeeks.length-1] ?? "") + ".jpg"
