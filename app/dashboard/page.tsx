@@ -594,10 +594,13 @@ function ExportTable(props: ExportProps) {
                       <div style={{ fontWeight:500, marginBottom:2, fontSize:8 }}>{c.jk_normal} / {c.jk_lembur > 0 ? c.jk_lembur : 0} jam</div>
                       <div style={{ fontSize:7, color:C.tx3 }}>BUYER</div>
                       <div style={{ fontWeight:500, marginBottom:2, fontSize:8 }}>{uniqueBuyers.join(", ") || "-"}</div>
+                      <div style={{ fontSize:7, color:C.tx3 }}>QTY (PCS)</div>
+                      <div style={{ fontWeight:500, marginBottom:3, fontSize:8 }}>{uniqueBuyers.length ? uniqueBuyers.map(function(b: string) { return qtyMap[b] }).join(", ") : "-"}</div>
+                      <div style={{ fontSize:8, fontWeight:700, color:C.gdark, marginBottom:2 }}>BUYER DIST.</div>
                       <DistBar segments={countSegs}/>
-                      <div style={{ height:2 }}/>
+                      <div style={{ fontSize:8, fontWeight:700, color:C.gdark, marginTop:4, marginBottom:2 }}>QTY DIST.</div>
                       <DistBar segments={qtySegs}/>
-                      <div style={{ fontSize:7, color:C.tx3, marginTop:2 }}>{totalQty.toLocaleString("en-US")} pcs</div>
+                      <div style={{ fontSize:7, color:C.tx3, marginTop:3 }}>Total: {totalQty} pcs</div>
                     </td>
                   )
                 })}
@@ -748,7 +751,7 @@ function KalenderTable(props: KalenderProps) {
                     })
                     const qtySegs = uniqueBuyers.map(function(b: string) {
                       const pct = totalQty > 0 ? (qtyMap[b] / totalQty) * 100 : 0
-                      return { color:buyerColors[b], pct, label: b + ": " + qtyMap[b].toLocaleString("en-US") + " pcs (" + pct.toFixed(0) + "%)" }
+                      return { color:buyerColors[b], pct, label: b + ": " + qtyMap[b] + " pcs (" + pct.toFixed(0) + "%)" }
                     })
                     return (
                       <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
@@ -765,11 +768,14 @@ function KalenderTable(props: KalenderProps) {
                         <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
                         <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.join(", ") : "-"}</div>
 
-                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:2 }}>Buyer Distribution</div>
+                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty (pcs)</div>
+                        <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.map(function(b: string) { return qtyMap[b] }).join(", ") : "-"}</div>
+
+                        <div style={{ fontSize:10, fontWeight:700, color:C.gdark, textTransform:"uppercase", marginBottom:4 }}>Buyer Distribution</div>
                         <DistBar segments={countSegs}/>
-                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginTop:6, marginBottom:2 }}>Qty Distribution</div>
+                        <div style={{ fontSize:10, fontWeight:700, color:C.gdark, textTransform:"uppercase", marginTop:8, marginBottom:4 }}>Qty Distribution</div>
                         <DistBar segments={qtySegs}/>
-                        <div style={{ fontSize:9, color:C.tx3, marginTop:4 }}>Total Qty: {totalQty.toLocaleString("en-US")} pcs</div>
+                        <div style={{ fontSize:9, color:C.tx3, marginTop:6 }}>Total Qty: {totalQty} pcs</div>
                       </td>
                     )
                   })}
