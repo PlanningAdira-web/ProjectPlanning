@@ -900,8 +900,6 @@ export default function DashboardPage() {
   const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
   const [expShow,     setExpShow]     = useState(false)
   const [expMode,     setExpMode]     = useState<"line"|"buyer"|"factory">("line")
-  const [expWeekFrom, setExpWeekFrom] = useState("")
-  const [expWeekTo,   setExpWeekTo]   = useState("")
   const [expLines,    setExpLines]    = useState<string[]>([])
   const [expBuyers,   setExpBuyers]   = useState<string[]>([])
   const [expFactories,setExpFactories]= useState<string[]>([])
@@ -1098,6 +1096,14 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setKalenderLoading(false) })
   }, [page, kalenderData])
+
+  // Reset pilihan manual Line/Buyer/Factory di panel Export JPG setiap kali Factory tab
+  // atau Search box di toolbar Kalender Planning berubah, supaya tidak "nyangkut" ke filter lama
+  useEffect(function() {
+    setExpLines([])
+    setExpBuyers([])
+    setExpFactories([])
+  }, [kalenderFactory, kalenderSearch])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -1737,23 +1743,38 @@ export default function DashboardPage() {
             </div>
 
             {expShow && kalenderData && (function() {
-              const allLinesGlobal = (Array.from(new Set(
-                (kalenderData.factories ?? []).flatMap(function(f: string) { return kalenderData.lines[f] ?? [] })
+              // Semua pool (Line/Buyer/Factory) di bawah ini otomatis ikut Factory tab & Search yang sedang aktif di tabel utama
+              const activeFactories: string[] = kalenderFactory === "__ALL__" ? (kalenderData.factories ?? []) : [kalenderFactory]
+
+              const baseLinesPool = (Array.from(new Set(
+                activeFactories.flatMap(function(f: string) { return kalenderData.lines[f] ?? [] })
               )) as string[]).sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
 
+              // Rentang minggu ikut "Filter Minggu" di toolbar atas (bukan kontrol sendiri lagi)
+              const weekOptions: string[] = kalenderData.weeks ?? []
+              const fromIdx = weekOptions.indexOf(kalenderWeekFrom) >= 0 ? weekOptions.indexOf(kalenderWeekFrom) : 0
+              const toIdx   = weekOptions.indexOf(kalenderWeekTo)   >= 0 ? weekOptions.indexOf(kalenderWeekTo)   : weekOptions.length - 1
+              const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx)
+              const chosenWeeks = weekOptions.slice(lo, hi + 1)
+
+              // Terapkan Search box (kalenderSearch) ke pool Line, sama seperti yang tampil di tabel
+              const allLinesGlobal = kalenderSearch
+                ? baseLinesPool.filter(function(l: string) {
+                    return chosenWeeks.some(function(w: string) {
+                      const found = lookupCell(kalenderData, w, l, kalenderFactory === "__ALL__" ? undefined : activeFactories)
+                      return found && matchSearch({ line:l, buyer:found.cell.buyers.join(" "), fact: found.fact }, kalenderSearch)
+                    })
+                  })
+                : baseLinesPool
+
               const allBuyersGlobal = Array.from(new Set(
-                (kalenderData.factories ?? []).flatMap(function(f: string) {
-                  return Object.values(kalenderData.cells[f] ?? {}).flatMap(function(byLine: any) {
+                activeFactories.flatMap(function(f: string) {
+                  return chosenWeeks.flatMap(function(w: string) {
+                    const byLine = kalenderData.cells[f]?.[w] ?? {}
                     return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
                   })
                 })
               )) as string[]
-
-              const weekOptions: string[] = kalenderData.weeks ?? []
-              const fromIdx = weekOptions.indexOf(expWeekFrom) >= 0 ? weekOptions.indexOf(expWeekFrom) : 0
-              const toIdx   = weekOptions.indexOf(expWeekTo)   >= 0 ? weekOptions.indexOf(expWeekTo)   : weekOptions.length - 1
-              const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx)
-              const chosenWeeks = weekOptions.slice(lo, hi + 1)
 
               let exportLines: string[] = []
               let restrictFactories: string[] | undefined = undefined
@@ -1762,21 +1783,22 @@ export default function DashboardPage() {
               if (expMode === "line") {
                 exportLines = expLines.length ? expLines : allLinesGlobal
               } else if (expMode === "factory") {
-                const facts = expFactories.length ? expFactories : (kalenderData.factories ?? [])
+                const facts = expFactories.length ? expFactories : activeFactories
                 restrictFactories = facts
                 showFactBadge = facts.length > 1
                 exportLines = (Array.from(new Set(facts.flatMap(function(f: string) { return kalenderData.lines[f] ?? [] }))) as string[])
                   .sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
               } else {
-                // mode "buyer": cari Line yang punya minimal 1 buyer terpilih di salah satu minggu terpilih
+                // mode "buyer": cari Line (dalam Factory aktif) yang punya minimal 1 buyer terpilih di salah satu minggu terpilih
                 const chosenBuyers = expBuyers.length ? expBuyers : allBuyersGlobal
+                restrictFactories = kalenderFactory === "__ALL__" ? undefined : activeFactories
                 exportLines = allLinesGlobal.filter(function(l: string) {
                   return chosenWeeks.some(function(w: string) {
-                    const found = lookupCell(kalenderData, w, l)
+                    const found = lookupCell(kalenderData, w, l, restrictFactories)
                     return found && found.cell.buyers.some(function(b: string) { return chosenBuyers.includes(b) })
                   })
                 })
-                showFactBadge = true
+                showFactBadge = kalenderFactory === "__ALL__"
               }
 
               function toggleFrom(list: string[], setList: (v: string[]) => void, item: string) {
@@ -1829,39 +1851,28 @@ export default function DashboardPage() {
                     })}
                   </div>
 
-                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:10 }}>
-                    <div>
-                      <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:4 }}>Rentang Minggu</div>
-                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                        <select value={expWeekFrom || weekOptions[0] || ""} onChange={function(e) { setExpWeekFrom(e.target.value) }}
-                          style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
-                          {weekOptions.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
-                        </select>
-                        <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
-                        <select value={expWeekTo || weekOptions[weekOptions.length-1] || ""} onChange={function(e) { setExpWeekTo(e.target.value) }}
-                          style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
-                          {weekOptions.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
-                        </select>
-                      </div>
-                    </div>
+                  <div style={{ fontSize:9, color:C.tx3, marginBottom:10 }}>
+                    Rentang Minggu: <strong style={{ color:C.gdark }}>Minggu {chosenWeeks[0] ?? "-"} s/d Minggu {chosenWeeks[chosenWeeks.length-1] ?? "-"}</strong> &bull; Factory: <strong style={{ color:C.gdark }}>{kalenderFactory === "__ALL__" ? "Semua Line" : kalenderFactory}</strong>
+                    {kalenderSearch && <> &bull; Search: <strong style={{ color:C.gdark }}>"{kalenderSearch}"</strong></>}
+                    {" "}<span style={{ fontStyle:"italic" }}>(ikut Filter Minggu, Factory, dan Search di toolbar atas)</span>
+                  </div>
 
-                    <div style={{ flex:1, minWidth:220 }}>
-                      <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:4 }}>
-                        {expMode === "line" ? "Pilih Line (kosongkan = semua)" : expMode === "buyer" ? "Pilih Buyer (kosongkan = semua)" : "Pilih Factory (kosongkan = semua)"}
-                      </div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:5, maxHeight:80, overflowY:"auto" }}>
-                        {(expMode === "line" ? allLinesGlobal : expMode === "buyer" ? allBuyersGlobal : (kalenderData.factories ?? [])).map(function(item: string) {
-                          const list  = expMode === "line" ? expLines : expMode === "buyer" ? expBuyers : expFactories
-                          const setFn = expMode === "line" ? setExpLines : expMode === "buyer" ? setExpBuyers : setExpFactories
-                          const active = list.includes(item)
-                          return (
-                            <button key={item} onClick={function() { toggleFrom(list, setFn, item) }}
-                              style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:active?C.gdark:"#fff", color:active?"#fff":C.tx2, cursor:"pointer" }}>
-                              {item}
-                            </button>
-                          )
-                        })}
-                      </div>
+                  <div style={{ marginBottom:10 }}>
+                    <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:4 }}>
+                      {expMode === "line" ? "Pilih Line (kosongkan = semua)" : expMode === "buyer" ? "Pilih Buyer (kosongkan = semua)" : "Pilih Factory (kosongkan = semua)"}
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:5, maxHeight:80, overflowY:"auto" }}>
+                      {(expMode === "line" ? allLinesGlobal : expMode === "buyer" ? allBuyersGlobal : activeFactories).map(function(item: string) {
+                        const list  = expMode === "line" ? expLines : expMode === "buyer" ? expBuyers : expFactories
+                        const setFn = expMode === "line" ? setExpLines : expMode === "buyer" ? setExpBuyers : setExpFactories
+                        const active = list.includes(item)
+                        return (
+                          <button key={item} onClick={function() { toggleFrom(list, setFn, item) }}
+                            style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:active?C.gdark:"#fff", color:active?"#fff":C.tx2, cursor:"pointer" }}>
+                            {item}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
