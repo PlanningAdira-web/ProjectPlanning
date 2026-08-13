@@ -520,46 +520,6 @@ function buyerBreakdown(c: { buyers: string[]; qtys: number[] }) {
   return { countMap, qtyMap, uniqueBuyers, totalCount, totalQty }
 }
 
-type BuyerRekapRow = { buyer: string; qty: number; jkNormal: number; jkLembur: number; lineCount: number }
-
-// Rekap agregat per Buyer: Qty total, JK Normal/Lembur (dibagi proporsional sesuai porsi Qty
-// kalau 1 Line+Minggu dikerjakan >1 buyer), dan jumlah Line unik. Line di excludeLines dikecualikan total.
-function computeBuyerRekap(data: any, weeks: string[], excludeLines: string[]): BuyerRekapRow[] {
-  const excludeSet = new Set(excludeLines.map(function(l) { return l.toUpperCase() }))
-  const acc: Record<string, { qty: number; jkNormal: number; jkLembur: number; lines: Set<string> }> = {}
-  const factories: string[] = data.factories ?? []
-
-  weeks.forEach(function(w: string) {
-    factories.forEach(function(f: string) {
-      const byLine = data.cells[f]?.[w] ?? {}
-      Object.keys(byLine).forEach(function(line: string) {
-        if (excludeSet.has(line.toUpperCase())) return
-        const cell = byLine[line]
-        const { qtyMap, totalQty, uniqueBuyers } = buyerBreakdown(cell)
-        uniqueBuyers.forEach(function(b: string) {
-          if (!acc[b]) acc[b] = { qty:0, jkNormal:0, jkLembur:0, lines:new Set() }
-          const share = totalQty > 0 ? (qtyMap[b] / totalQty) : (1 / uniqueBuyers.length)
-          acc[b].qty      += qtyMap[b]
-          acc[b].jkNormal += cell.jk_normal * share
-          acc[b].jkLembur += cell.jk_lembur * share
-          acc[b].lines.add(line)
-        })
-      })
-    })
-  })
-
-  return Object.keys(acc)
-    .map(function(b: string) {
-      return {
-        buyer: b,
-        qty: acc[b].qty,
-        jkNormal: Math.round(acc[b].jkNormal * 10) / 10,
-        jkLembur: Math.round(acc[b].jkLembur * 10) / 10,
-        lineCount: acc[b].lines.size,
-      }
-    })
-    .sort(function(a, b) { return b.qty - a.qty })
-}
 
 function DistBar(props: { segments: { color: string; pct: number; label: string }[] }) {
   return (
@@ -728,6 +688,38 @@ function KalenderTable(props: KalenderProps) {
       })
     : allLines
 
+  // Rekap Buyer: dihitung dari weeks + searchedLines + cellsForFactory yang SAMA dengan tabel di kanan,
+  // jadi otomatis ikut Filter Minggu, Factory, dan Search yang sedang aktif. Line K12 & A27 dikecualikan.
+  const REKAP_EXCLUDE = new Set(["K12", "A27"])
+  const rekapAcc: Record<string, { qty: number; jkNormal: number; jkLembur: number; lines: Set<string> }> = {}
+  weeks.forEach(function(w: string) {
+    searchedLines.forEach(function(l: string) {
+      if (REKAP_EXCLUDE.has(l.toUpperCase())) return
+      const cell = cellsForFactory[w]?.[l]
+      if (!cell) return
+      const { qtyMap, totalQty, uniqueBuyers } = buyerBreakdown(cell)
+      uniqueBuyers.forEach(function(b: string) {
+        if (!rekapAcc[b]) rekapAcc[b] = { qty:0, jkNormal:0, jkLembur:0, lines:new Set() }
+        const share = totalQty > 0 ? (qtyMap[b] / totalQty) : (1 / uniqueBuyers.length)
+        rekapAcc[b].qty      += qtyMap[b]
+        rekapAcc[b].jkNormal += cell.jk_normal * share
+        rekapAcc[b].jkLembur += cell.jk_lembur * share
+        rekapAcc[b].lines.add(l)
+      })
+    })
+  })
+  const rekapRows = Object.keys(rekapAcc)
+    .map(function(b: string) {
+      return {
+        buyer: b,
+        qty: rekapAcc[b].qty,
+        jkNormal: Math.round(rekapAcc[b].jkNormal * 10) / 10,
+        jkLembur: Math.round(rekapAcc[b].jkLembur * 10) / 10,
+        lineCount: rekapAcc[b].lines.size,
+      }
+    })
+    .sort(function(a, b) { return b.qty - a.qty })
+
   const labelColW = 130
   const lineColW  = 190
 
@@ -738,7 +730,42 @@ function KalenderTable(props: KalenderProps) {
   }
 
   return (
-    <div>
+    <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
+      {/* == PANEL REKAP BUYER (kiri, ikut semua filter di kanan) == */}
+      <div style={{ flex:"0 0 240px" }}>
+        <div style={{ fontSize:10, fontWeight:600, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>
+          Rekap Buyer
+        </div>
+        <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
+          Tidak termasuk Line K12 &amp; A27 (cadangan)
+        </div>
+        {rekapRows.length === 0 ? (
+          <div style={{ fontSize:11, color:C.tx3, padding:"12px 0" }}>Tidak ada data untuk filter ini.</div>
+        ) : (
+          <div style={{ border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden", maxHeight:"calc(100vh - 260px)", overflowY:"auto" }}>
+            {rekapRows.map(function(r, i) {
+              const bg = i % 2 === 0 ? "#e8f5e9" : "#fff"
+              return (
+                <div key={r.buyer} style={{ background:bg, padding:"8px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                    <span style={{ width:8, height:8, borderRadius:2, background:buyerColors[r.buyer], flexShrink:0 }}/>
+                    <strong style={{ fontSize:11, color:C.txt }}>{r.buyer}</strong>
+                  </div>
+                  <div style={{ fontSize:10, color:C.tx2, display:"grid", gridTemplateColumns:"1fr auto", rowGap:2 }}>
+                    <span>Qty</span><span style={{ fontWeight:600, color:C.gdark, textAlign:"right" }}>{r.qty} pcs</span>
+                    <span>JK Normal</span><span style={{ textAlign:"right" }}>{r.jkNormal} jam</span>
+                    <span>JK Lembur</span><span style={{ textAlign:"right", color: r.jkLembur > 0 ? C.org : C.tx3 }}>{r.jkLembur > 0 ? r.jkLembur + " jam" : "-"}</span>
+                    <span>Jumlah Line</span><span style={{ textAlign:"right" }}>{r.lineCount}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* == TABEL KALENDER (kanan) == */}
+      <div style={{ flex:1, minWidth:0 }}>
       <SearchBox value={search} onChange={setSearch} placeholder="Cari line, buyer, atau factory..." resultCount={searchedLines.length}/>
 
       {legendBuyers.length > 1 && (
@@ -837,6 +864,7 @@ function KalenderTable(props: KalenderProps) {
         <span>Freeze kolom Minggu / Line di kiri</span>
         {data?.fetched_epoch && <span style={{ marginLeft:"auto" }}>Update: {ageLabel(data.fetched_epoch)}</span>}
       </div>
+      </div>
     </div>
   )
 }
@@ -869,8 +897,6 @@ export default function DashboardPage() {
   const [kalenderSearch, setKalenderSearch] = useState("")
   const [kalenderWeekFrom, setKalenderWeekFrom] = useState("")
   const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
-  const [rekapWeekFrom, setRekapWeekFrom] = useState("")
-  const [rekapWeekTo,   setRekapWeekTo]   = useState("")
   const [expShow,     setExpShow]     = useState(false)
   const [expMode,     setExpMode]     = useState<"line"|"buyer"|"factory">("line")
   const [expWeekFrom, setExpWeekFrom] = useState("")
@@ -1860,79 +1886,6 @@ export default function DashboardPage() {
             })()}
 
             <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch} weekFrom={kalenderWeekFrom} weekTo={kalenderWeekTo}/>
-
-            {/* == REKAP BUYER (agregat, exclude Line K12 & A27) == */}
-            {kalenderData && (function() {
-              const EXCLUDE_LINES = ["K12", "A27"]
-              const weekOptions: string[] = kalenderData.weeks ?? []
-              const fromIdx = weekOptions.indexOf(rekapWeekFrom) >= 0 ? weekOptions.indexOf(rekapWeekFrom) : 0
-              const toIdx   = weekOptions.indexOf(rekapWeekTo)   >= 0 ? weekOptions.indexOf(rekapWeekTo)   : weekOptions.length - 1
-              const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx)
-              const chosenWeeks = weekOptions.slice(lo, hi + 1)
-              const rekapRows = computeBuyerRekap(kalenderData, chosenWeeks, EXCLUDE_LINES)
-              const buyerColors = buildBuyerColorMap(kalenderData)
-
-              return (
-                <div style={{ marginTop:20 }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, flexWrap:"wrap", gap:8 }}>
-                    <span style={{ fontSize:10, fontWeight:600, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Rekap Buyer</span>
-                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                      <span style={{ fontSize:10, color:C.tx3 }}>Rentang Minggu:</span>
-                      <select value={rekapWeekFrom || weekOptions[0] || ""} onChange={function(e) { setRekapWeekFrom(e.target.value) }}
-                        style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
-                        {weekOptions.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
-                      </select>
-                      <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
-                      <select value={rekapWeekTo || weekOptions[weekOptions.length-1] || ""} onChange={function(e) { setRekapWeekTo(e.target.value) }}
-                        style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
-                        {weekOptions.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 10px", marginBottom:10, display:"inline-block" }}>
-                    Perhitungan tidak termasuk Line {EXCLUDE_LINES.join(" dan ")} (line cadangan)
-                  </div>
-
-                  {rekapRows.length === 0 ? (
-                    <div style={{ padding:"20px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
-                      Tidak ada data pada rentang minggu ini.
-                    </div>
-                  ) : (
-                  <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9" }}>
-                    <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:11, width:"100%", minWidth:520 }}>
-                      <thead>
-                        <tr>
-                          <th style={{ background:C.gdark, color:"#fff", padding:"7px 10px", textAlign:"left" }}>Buyer</th>
-                          <th style={{ background:C.gdark, color:"#fff", padding:"7px 10px", textAlign:"right" }}>Qty (pcs)</th>
-                          <th style={{ background:C.gdark, color:"#fff", padding:"7px 10px", textAlign:"right" }}>JK Normal (jam)</th>
-                          <th style={{ background:C.gdark, color:"#fff", padding:"7px 10px", textAlign:"right" }}>JK Lembur (jam)</th>
-                          <th style={{ background:C.gdark, color:"#fff", padding:"7px 10px", textAlign:"right" }}>Jumlah Line</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rekapRows.map(function(r: BuyerRekapRow, i: number) {
-                          const bg = i % 2 === 0 ? "#e8f5e9" : "#fff"
-                          return (
-                            <tr key={r.buyer}>
-                              <td style={{ background:bg, padding:"7px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
-                                <span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:buyerColors[r.buyer], marginRight:6, verticalAlign:"middle" }}/>
-                                <strong style={{ color:C.txt }}>{r.buyer}</strong>
-                              </td>
-                              <td style={{ background:bg, padding:"7px 10px", borderBottom:"0.5px solid #cfe0cc", textAlign:"right", fontWeight:600, color:C.gdark }}>{r.qty}</td>
-                              <td style={{ background:bg, padding:"7px 10px", borderBottom:"0.5px solid #cfe0cc", textAlign:"right" }}>{r.jkNormal}</td>
-                              <td style={{ background:bg, padding:"7px 10px", borderBottom:"0.5px solid #cfe0cc", textAlign:"right", color: r.jkLembur > 0 ? C.org : C.tx3 }}>{r.jkLembur > 0 ? r.jkLembur : "-"}</td>
-                              <td style={{ background:bg, padding:"7px 10px", borderBottom:"0.5px solid #cfe0cc", textAlign:"right" }}>{r.lineCount}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  )}
-                </div>
-              )
-            })()}
           </div>
         )}
 
