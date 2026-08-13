@@ -730,44 +730,7 @@ function KalenderTable(props: KalenderProps) {
   }
 
   return (
-    <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
-      {/* == PANEL REKAP BUYER (kiri, ikut semua filter di kanan) == */}
-      <div style={{ flex:"0 0 240px" }}>
-        <div style={{ fontSize:10, fontWeight:600, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>
-          Rekap Buyer
-        </div>
-        <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
-          Tidak termasuk Line K12 &amp; A27 (cadangan)
-        </div>
-        {rekapRows.length === 0 ? (
-          <div style={{ fontSize:11, color:C.tx3, padding:"12px 0" }}>Tidak ada data untuk filter ini.</div>
-        ) : (
-          <div style={{ border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden", maxHeight:"calc(100vh - 260px)", overflowY:"auto" }}>
-            {rekapRows.map(function(r, i) {
-              const bg = i % 2 === 0 ? "#e8f5e9" : "#fff"
-              return (
-                <div key={r.buyer} style={{ background:bg, padding:"8px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                    <span style={{ width:8, height:8, borderRadius:2, background:buyerColors[r.buyer], flexShrink:0 }}/>
-                    <strong style={{ fontSize:11, color:C.txt }}>{r.buyer}</strong>
-                  </div>
-                  <div style={{ fontSize:10, color:C.tx2, display:"grid", gridTemplateColumns:"1fr auto", rowGap:2 }}>
-                    <span>Qty</span><span style={{ fontWeight:600, color:C.gdark, textAlign:"right" }}>{r.qty} pcs</span>
-                    <span>JK Normal</span><span style={{ textAlign:"right" }}>{r.jkNormal} jam</span>
-                    <span>JK Lembur</span><span style={{ textAlign:"right", color: r.jkLembur > 0 ? C.org : C.tx3 }}>{r.jkLembur > 0 ? r.jkLembur + " jam" : "-"}</span>
-                    <span>Jumlah Line</span><span style={{ textAlign:"right" }}>{r.lineCount}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* == TABEL KALENDER (kanan) == */}
-      <div style={{ flex:1, minWidth:0 }}>
-      <SearchBox value={search} onChange={setSearch} placeholder="Cari line, buyer, atau factory..." resultCount={searchedLines.length}/>
-
+    <div>
       {legendBuyers.length > 1 && (
         <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:10, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
           {legendBuyers.map(function(b: string) {
@@ -780,6 +743,43 @@ function KalenderTable(props: KalenderProps) {
           })}
         </div>
       )}
+
+      <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
+        {/* == PANEL REKAP BUYER (kiri, ikut semua filter di kanan) == */}
+        <div style={{ flex:"0 0 240px" }}>
+          <div style={{ fontSize:10, fontWeight:600, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>
+            Rekap Buyer
+          </div>
+          <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
+            Tidak termasuk Line K12 &amp; A27 (cadangan)
+          </div>
+          {rekapRows.length === 0 ? (
+            <div style={{ fontSize:11, color:C.tx3, padding:"12px 0" }}>Tidak ada data untuk filter ini.</div>
+          ) : (
+            <div style={{ border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden", maxHeight:"calc(100vh - 260px)", overflowY:"auto" }}>
+              {rekapRows.map(function(r, i) {
+                const bg = i % 2 === 0 ? "#e8f5e9" : "#fff"
+                return (
+                  <div key={r.buyer} style={{ background:bg, padding:"8px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                      <span style={{ width:8, height:8, borderRadius:2, background:buyerColors[r.buyer], flexShrink:0 }}/>
+                      <strong style={{ fontSize:11, color:C.txt }}>{r.buyer}</strong>
+                    </div>
+                    <div style={{ fontSize:10, color:C.tx2, display:"grid", gridTemplateColumns:"1fr auto", rowGap:2 }}>
+                      <span>Qty</span><span style={{ fontWeight:600, color:C.gdark, textAlign:"right" }}>{r.qty} pcs</span>
+                      <span>JK Normal</span><span style={{ textAlign:"right" }}>{r.jkNormal} jam</span>
+                      <span>JK Lembur</span><span style={{ textAlign:"right", color: r.jkLembur > 0 ? C.org : C.tx3 }}>{r.jkLembur > 0 ? r.jkLembur + " jam" : "-"}</span>
+                      <span>Jumlah Line</span><span style={{ textAlign:"right" }}>{r.lineCount}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* == TABEL KALENDER (kanan) == */}
+        <div style={{ flex:1, minWidth:0 }}>
 
       {searchedLines.length === 0 ? (
         <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
@@ -864,6 +864,7 @@ function KalenderTable(props: KalenderProps) {
         <span>Freeze kolom Minggu / Line di kiri</span>
         {data?.fetched_epoch && <span style={{ marginLeft:"auto" }}>Update: {ageLabel(data.fetched_epoch)}</span>}
       </div>
+        </div>
       </div>
     </div>
   )
@@ -1687,9 +1688,27 @@ export default function DashboardPage() {
         {/* == KALENDER PLANNING == */}
         {page==="kalender" && (
           <div>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase" }}>Kalender Planning</span>
-              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+              <div style={{ flex:"0 0 220px" }}>
+                <SearchBox value={kalenderSearch} onChange={setKalenderSearch} placeholder="Cari line, buyer, atau factory..."/>
+              </div>
+
+              {kalenderData?.weeks && (
+                <>
+                  <span style={{ fontSize:10, color:C.tx3 }}>Filter Minggu:</span>
+                  <select value={kalenderWeekFrom || kalenderData.weeks[0] || ""} onChange={function(e) { setKalenderWeekFrom(e.target.value) }}
+                    style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                    {kalenderData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                  </select>
+                  <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
+                  <select value={kalenderWeekTo || kalenderData.weeks[kalenderData.weeks.length-1] || ""} onChange={function(e) { setKalenderWeekTo(e.target.value) }}
+                    style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                    {kalenderData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                  </select>
+                </>
+              )}
+
+              <div style={{ display:"flex", gap:6, alignItems:"center", marginLeft:"auto", flexWrap:"wrap" }}>
                 <button onClick={function() { setKalenderFactory("__ALL__") }}
                   style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
                     background:kalenderFactory==="__ALL__"?C.gdark:"#fff",
@@ -1716,27 +1735,6 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-
-            {kalenderData?.weeks && (
-              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:12 }}>
-                <span style={{ fontSize:10, color:C.tx3 }}>Filter Minggu:</span>
-                <select value={kalenderWeekFrom || kalenderData.weeks[0] || ""} onChange={function(e) { setKalenderWeekFrom(e.target.value) }}
-                  style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
-                  {kalenderData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
-                </select>
-                <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
-                <select value={kalenderWeekTo || kalenderData.weeks[kalenderData.weeks.length-1] || ""} onChange={function(e) { setKalenderWeekTo(e.target.value) }}
-                  style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
-                  {kalenderData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
-                </select>
-                {(kalenderWeekFrom || kalenderWeekTo) && (
-                  <button onClick={function() { setKalenderWeekFrom(""); setKalenderWeekTo("") }}
-                    style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
-                    Reset
-                  </button>
-                )}
-              </div>
-            )}
 
             {expShow && kalenderData && (function() {
               const allLinesGlobal = (Array.from(new Set(
