@@ -894,7 +894,7 @@ export default function DashboardPage() {
   const [planSewSearch, setPlanSewSearch] = useState("")
   const [kalenderData,   setKalenderData]   = useState<any>(null)
   const [kalenderLoading,setKalenderLoading]= useState(false)
-  const [kalenderFactory,setKalenderFactory]= useState("K")
+  const [kalenderFactory,setKalenderFactory]= useState("__ALL__")
   const [kalenderSearch, setKalenderSearch] = useState("")
   const [kalenderWeekFrom, setKalenderWeekFrom] = useState("")
   const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
