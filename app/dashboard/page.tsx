@@ -694,17 +694,23 @@ function KalenderTable(props: KalenderProps) {
 
   // Tabel Minggu x Line untuk subset Line tertentu - dipakai untuk tabel utama (semua searchedLines)
   // MAUPUN untuk tiap potongan/chunk saat di-download jadi JPG (subset lebih kecil, header tetap ikut)
-  function renderKalenderGrid(linesSubset: string[]) {
+  function renderKalenderGrid(linesSubset: string[], forCapture?: boolean) {
+    const stickyPos = forCapture ? ("static" as const) : ("sticky" as const)
     return (
-      <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 200px)" }}>
+      <div style={{
+        overflowX: forCapture ? "visible" : "auto",
+        overflowY: forCapture ? "visible" : "auto",
+        borderRadius:8, border:"0.5px solid #c8e6c9",
+        maxHeight: forCapture ? "none" : "calc(100vh - 200px)",
+      }}>
         <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:11, minWidth:"max-content" }}>
           <thead>
             <tr>
-              <th style={{ ...th, position:"sticky", left:0, top:0, zIndex:11, minWidth:labelColW, background:"#1b4d24", borderRight:"2px solid rgba(255,255,255,.35)" }}>
+              <th style={{ ...th, position:stickyPos, left:0, top:0, zIndex:11, minWidth:labelColW, background:"#1b4d24", borderRight:"2px solid rgba(255,255,255,.35)" }}>
                 Minggu / Line
               </th>
               {linesSubset.map(function(l: string) {
-                return <th key={l} style={{ ...th, minWidth:lineColW }}>{"Line " + l}</th>
+                return <th key={l} style={{ ...th, position:stickyPos, minWidth:lineColW }}>{"Line " + l}</th>
               })}
             </tr>
           </thead>
@@ -714,7 +720,7 @@ function KalenderTable(props: KalenderProps) {
               return (
                 <tr key={w}>
                   <td style={{
-                    position:"sticky", left:0, zIndex:1, background:bg, padding:"8px 10px",
+                    position:stickyPos, left:0, zIndex:1, background:bg, padding:"8px 10px",
                     borderRight:"2px solid #4caf50", borderBottom:"0.5px solid #cfe0cc", minWidth:labelColW,
                   }}>
                     <div style={{ fontWeight:600, color:C.gdark }}>Minggu {w}</div>
@@ -898,7 +904,7 @@ function KalenderTable(props: KalenderProps) {
           return (
             <div key={i} ref={function(el) { chunkRefs.current[i] = el }} style={{ background:"#fff", padding:12, display:"flex", gap:16, alignItems:"flex-start" }}>
               {dlScope === "both" && renderRekapPanel()}
-              <div>{renderKalenderGrid(chunk)}</div>
+              <div>{renderKalenderGrid(chunk, true)}</div>
             </div>
           )
         })}
