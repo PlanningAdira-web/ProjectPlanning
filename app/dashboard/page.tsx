@@ -531,85 +531,10 @@ function DistBar(props: { segments: { color: string; pct: number; label: string 
   )
 }
 
-function lookupCell(data: any, week: string, line: string, restrictFactories?: string[]): { cell: any; fact: string } | null {
-  const facts: string[] = restrictFactories ?? (data.factories ?? [])
-  for (const f of facts) {
-    const c = data.cells[f]?.[week]?.[line]
-    if (c) return { cell: c, fact: f }
-  }
-  return null
-}
-
-type ExportProps = {
-  data: any
-  weeks: string[]
-  lines: string[]
-  restrictFactories?: string[]
-  showFactBadge: boolean
-}
-
-function ExportTable(props: ExportProps) {
-  const { data, weeks, lines, restrictFactories, showFactBadge } = props
-  const buyerColors = buildBuyerColorMap(data)
-  const labelColW = 78
-  const lineColW  = 128
-
-  return (
-    <div style={{ background:"#fff", padding:12, fontFamily:"system-ui, sans-serif" }}>
-      <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:9 }}>
-        <thead>
-          <tr>
-            <th style={{ background:"#1b4d24", color:"#fff", padding:"4px 6px", textAlign:"left", minWidth:labelColW }}>Minggu / Line</th>
-            {lines.map(function(l: string) {
-              return <th key={l} style={{ background:C.gdark, color:"#fff", padding:"4px 6px", textAlign:"left", minWidth:lineColW }}>{"Line " + l}</th>
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {weeks.map(function(w: string, wi: number) {
-            const bg = wi % 2 === 0 ? "#e8f5e9" : "#fff"
-            return (
-              <tr key={w}>
-                <td style={{ background:bg, padding:"4px 6px", fontWeight:600, color:C.gdark, borderBottom:"0.5px solid #cfe0cc", minWidth:labelColW }}>
-                  Minggu {w}
-                </td>
-                {lines.map(function(l: string) {
-                  const found = lookupCell(data, w, l, restrictFactories)
-                  if (!found) {
-                    return <td key={l} style={{ background:bg, padding:"4px 6px", borderBottom:"0.5px solid #cfe0cc", minWidth:lineColW }}><span style={{ color:C.tx3, fontSize:8 }}>-</span></td>
-                  }
-                  const c = found.cell
-                  const { countMap, qtyMap, uniqueBuyers, totalCount, totalQty } = buyerBreakdown(c)
-                  const countSegs = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct:(countMap[b]/totalCount)*100, label:b } })
-                  const qtySegs   = uniqueBuyers.map(function(b: string) { return { color:buyerColors[b], pct: totalQty>0 ? (qtyMap[b]/totalQty)*100 : 0, label:b } })
-                  return (
-                    <td key={l} style={{ background:bg, padding:"4px 6px", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
-                      {showFactBadge && (
-                        <span style={{ display:"inline-block", fontSize:7, fontWeight:600, color:"#fff", background:C.gdark, padding:"0 4px", borderRadius:3, marginBottom:3 }}>
-                          {found.fact}
-                        </span>
-                      )}
-                      <div style={{ fontSize:7, color:C.tx3 }}>JK N/L</div>
-                      <div style={{ fontWeight:500, marginBottom:2, fontSize:8 }}>{c.jk_normal} / {c.jk_lembur > 0 ? c.jk_lembur : 0} jam</div>
-                      <div style={{ fontSize:7, color:C.tx3 }}>BUYER</div>
-                      <div style={{ fontWeight:500, marginBottom:2, fontSize:8 }}>{uniqueBuyers.join(", ") || "-"}</div>
-                      <div style={{ fontSize:7, color:C.tx3 }}>QTY (PCS)</div>
-                      <div style={{ fontWeight:500, marginBottom:3, fontSize:8 }}>{uniqueBuyers.length ? uniqueBuyers.map(function(b: string) { return qtyMap[b] }).join(", ") : "-"}</div>
-                      <div style={{ fontSize:8, fontWeight:700, color:C.gdark, marginBottom:2 }}>BUYER DIST.</div>
-                      <DistBar segments={countSegs}/>
-                      <div style={{ fontSize:8, fontWeight:700, color:C.gdark, marginTop:4, marginBottom:2 }}>QTY DIST.</div>
-                      <DistBar segments={qtySegs}/>
-                      <div style={{ fontSize:7, color:C.tx3, marginTop:3 }}>Total: {totalQty} pcs</div>
-                    </td>
-                  )
-                })}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
 }
 
 type KalenderProps = {
@@ -624,6 +549,11 @@ type KalenderProps = {
 
 function KalenderTable(props: KalenderProps) {
   const { loading, data, factory, search, setSearch, weekFrom, weekTo } = props
+  const [dlScope, setDlScope] = useState<"kalender"|"rekap"|"both">("both")
+  const [dlBusy,  setDlBusy]  = useState(false)
+  const chunkRefs = useRef<(HTMLDivElement | null)[]>([])
+  const rekapOnlyRef = useRef<HTMLDivElement>(null)
+
   if (loading) return (
     <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
       Memuat data dari sheet Kalender Planning...
@@ -727,63 +657,45 @@ function KalenderTable(props: KalenderProps) {
     borderRight:"0.5px solid rgba(255,255,255,.15)", borderBottom:"1px solid rgba(255,255,255,.2)",
   }
 
-  return (
-    <div>
-      {legendBuyers.length > 1 && (
-        <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:10, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
-          {legendBuyers.map(function(b: string) {
-            return (
-              <span key={b} style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:C.tx2 }}>
-                <span style={{ width:10, height:10, borderRadius:2, background:buyerColors[b] }}/>
-                {b}
-              </span>
-            )
-          })}
-        </div>
-      )}
+  // Konten 1 cell (JK Normal/Lembur, Buyer, Qty, 2 bar distribusi) - dipakai di tabel biasa & di capture JPG
+  function renderCellBody(c: any) {
+    const { countMap, qtyMap, uniqueBuyers, totalCount, totalQty } = buyerBreakdown(c)
+    const countSegs = uniqueBuyers.map(function(b: string) {
+      const pct = (countMap[b] / totalCount) * 100
+      return { color:buyerColors[b], pct, label: b + ": " + countMap[b] + " order (" + pct.toFixed(0) + "%)" }
+    })
+    const qtySegs = uniqueBuyers.map(function(b: string) {
+      const pct = totalQty > 0 ? (qtyMap[b] / totalQty) * 100 : 0
+      return { color:buyerColors[b], pct, label: b + ": " + qtyMap[b] + " pcs (" + pct.toFixed(0) + "%)" }
+    })
+    return (
+      <>
+        {isAll && c._fact && (
+          <span style={{ display:"inline-block", fontSize:9, fontWeight:600, color:"#fff", background:C.gdark, padding:"1px 6px", borderRadius:4, marginBottom:5 }}>
+            Factory {c._fact}
+          </span>
+        )}
+        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
+        <div style={{ fontWeight:500, marginBottom:4 }}>{c.jk_normal} jam</div>
+        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
+        <div style={{ fontWeight:500, marginBottom:6, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
+        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
+        <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.join(", ") : "-"}</div>
+        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty (pcs)</div>
+        <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.map(function(b: string) { return qtyMap[b] }).join(", ") : "-"}</div>
+        <div style={{ fontSize:10, fontWeight:700, color:C.gdark, textTransform:"uppercase", marginBottom:4 }}>Buyer Distribution</div>
+        <DistBar segments={countSegs}/>
+        <div style={{ fontSize:10, fontWeight:700, color:C.gdark, textTransform:"uppercase", marginTop:8, marginBottom:4 }}>Qty Distribution</div>
+        <DistBar segments={qtySegs}/>
+        <div style={{ fontSize:9, color:C.tx3, marginTop:6 }}>Total Qty: {totalQty} pcs</div>
+      </>
+    )
+  }
 
-      <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
-        {/* == PANEL REKAP BUYER (kiri, ikut semua filter di kanan) == */}
-        <div style={{ flex:"0 0 240px" }}>
-          <div style={{ fontSize:10, fontWeight:600, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>
-            Rekap Buyer
-          </div>
-          <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
-            Tidak termasuk Line K12 &amp; A27 (cadangan)
-          </div>
-          {rekapRows.length === 0 ? (
-            <div style={{ fontSize:11, color:C.tx3, padding:"12px 0" }}>Tidak ada data untuk filter ini.</div>
-          ) : (
-            <div style={{ border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden", maxHeight:"calc(100vh - 260px)", overflowY:"auto" }}>
-              {rekapRows.map(function(r, i) {
-                const bg = i % 2 === 0 ? "#e8f5e9" : "#fff"
-                return (
-                  <div key={r.buyer} style={{ background:bg, padding:"8px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                      <span style={{ width:8, height:8, borderRadius:2, background:buyerColors[r.buyer], flexShrink:0 }}/>
-                      <strong style={{ fontSize:11, color:C.txt }}>{r.buyer}</strong>
-                    </div>
-                    <div style={{ fontSize:10, color:C.tx2, display:"grid", gridTemplateColumns:"1fr auto", rowGap:2 }}>
-                      <span>Qty</span><span style={{ fontWeight:600, color:C.gdark, textAlign:"right" }}>{r.qty} pcs</span>
-                      <span>JK Normal</span><span style={{ textAlign:"right" }}>{r.jkNormal} jam</span>
-                      <span>JK Lembur</span><span style={{ textAlign:"right", color: r.jkLembur > 0 ? C.org : C.tx3 }}>{r.jkLembur > 0 ? r.jkLembur + " jam" : "-"}</span>
-                      <span>Jumlah Line</span><span style={{ textAlign:"right" }}>{r.lineCount}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* == TABEL KALENDER (kanan) == */}
-        <div style={{ flex:1, minWidth:0 }}>
-
-      {searchedLines.length === 0 ? (
-        <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
-          Tidak ada line/buyer yang cocok dengan pencarian "{search}".
-        </div>
-      ) : (
+  // Tabel Minggu x Line untuk subset Line tertentu - dipakai untuk tabel utama (semua searchedLines)
+  // MAUPUN untuk tiap potongan/chunk saat di-download jadi JPG (subset lebih kecil, header tetap ikut)
+  function renderKalenderGrid(linesSubset: string[]) {
+    return (
       <div style={{ overflowX:"auto", borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight:"calc(100vh - 200px)" }}>
         <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:11, minWidth:"max-content" }}>
           <thead>
@@ -791,7 +703,7 @@ function KalenderTable(props: KalenderProps) {
               <th style={{ ...th, position:"sticky", left:0, top:0, zIndex:11, minWidth:labelColW, background:"#1b4d24", borderRight:"2px solid rgba(255,255,255,.35)" }}>
                 Minggu / Line
               </th>
-              {searchedLines.map(function(l: string) {
+              {linesSubset.map(function(l: string) {
                 return <th key={l} style={{ ...th, minWidth:lineColW }}>{"Line " + l}</th>
               })}
             </tr>
@@ -807,7 +719,7 @@ function KalenderTable(props: KalenderProps) {
                   }}>
                     <div style={{ fontWeight:600, color:C.gdark }}>Minggu {w}</div>
                   </td>
-                  {searchedLines.map(function(l: string) {
+                  {linesSubset.map(function(l: string) {
                     const c = cellsForFactory[w]?.[l]
                     if (!c) {
                       return (
@@ -816,38 +728,9 @@ function KalenderTable(props: KalenderProps) {
                         </td>
                       )
                     }
-                    const { countMap, qtyMap, uniqueBuyers, totalCount, totalQty } = buyerBreakdown(c)
-                    const countSegs = uniqueBuyers.map(function(b: string) {
-                      const pct = (countMap[b] / totalCount) * 100
-                      return { color:buyerColors[b], pct, label: b + ": " + countMap[b] + " order (" + pct.toFixed(0) + "%)" }
-                    })
-                    const qtySegs = uniqueBuyers.map(function(b: string) {
-                      const pct = totalQty > 0 ? (qtyMap[b] / totalQty) * 100 : 0
-                      return { color:buyerColors[b], pct, label: b + ": " + qtyMap[b] + " pcs (" + pct.toFixed(0) + "%)" }
-                    })
                     return (
                       <td key={l} style={{ background:bg, padding:"8px 10px", borderRight:"0.5px solid #cfe0cc", borderBottom:"0.5px solid #cfe0cc", verticalAlign:"top", minWidth:lineColW }}>
-                        {isAll && c._fact && (
-                          <span style={{ display:"inline-block", fontSize:9, fontWeight:600, color:"#fff", background:C.gdark, padding:"1px 6px", borderRadius:4, marginBottom:5 }}>
-                            Factory {c._fact}
-                          </span>
-                        )}
-                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Normal</div>
-                        <div style={{ fontWeight:500, marginBottom:4 }}>{c.jk_normal} jam</div>
-                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>JK Lembur</div>
-                        <div style={{ fontWeight:500, marginBottom:6, color: c.jk_lembur > 0 ? C.org : C.tx3 }}>{c.jk_lembur > 0 ? c.jk_lembur + " jam" : "-"}</div>
-
-                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Buyer</div>
-                        <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.join(", ") : "-"}</div>
-
-                        <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>Qty (pcs)</div>
-                        <div style={{ fontWeight:500, marginBottom:6 }}>{uniqueBuyers.length ? uniqueBuyers.map(function(b: string) { return qtyMap[b] }).join(", ") : "-"}</div>
-
-                        <div style={{ fontSize:10, fontWeight:700, color:C.gdark, textTransform:"uppercase", marginBottom:4 }}>Buyer Distribution</div>
-                        <DistBar segments={countSegs}/>
-                        <div style={{ fontSize:10, fontWeight:700, color:C.gdark, textTransform:"uppercase", marginTop:8, marginBottom:4 }}>Qty Distribution</div>
-                        <DistBar segments={qtySegs}/>
-                        <div style={{ fontSize:9, color:C.tx3, marginTop:6 }}>Total Qty: {totalQty} pcs</div>
+                        {renderCellBody(c)}
                       </td>
                     )
                   })}
@@ -857,12 +740,160 @@ function KalenderTable(props: KalenderProps) {
           </tbody>
         </table>
       </div>
-      )}
-      <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
-        <span>Freeze kolom Minggu / Line di kiri</span>
-        {data?.fetched_epoch && <span style={{ marginLeft:"auto" }}>Update: {ageLabel(data.fetched_epoch)}</span>}
-      </div>
+    )
+  }
+
+  // Panel Rekap Buyer - dipakai untuk tampilan utama MAUPUN untuk capture JPG
+  function renderRekapPanel() {
+    return (
+      <div style={{ flex:"0 0 240px" }}>
+        <div style={{ fontSize:10, fontWeight:600, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>
+          Rekap Buyer
         </div>
+        <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
+          Tidak termasuk Line K12 &amp; A27 (cadangan)
+        </div>
+        {rekapRows.length === 0 ? (
+          <div style={{ fontSize:11, color:C.tx3, padding:"12px 0" }}>Tidak ada data untuk filter ini.</div>
+        ) : (
+          <div style={{ border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
+            {rekapRows.map(function(r, i) {
+              const bg = i % 2 === 0 ? "#e8f5e9" : "#fff"
+              return (
+                <div key={r.buyer} style={{ background:bg, padding:"8px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                    <span style={{ width:8, height:8, borderRadius:2, background:buyerColors[r.buyer], flexShrink:0 }}/>
+                    <strong style={{ fontSize:11, color:C.txt }}>{r.buyer}</strong>
+                  </div>
+                  <div style={{ fontSize:10, color:C.tx2, display:"grid", gridTemplateColumns:"1fr auto", rowGap:2 }}>
+                    <span>Qty</span><span style={{ fontWeight:600, color:C.gdark, textAlign:"right" }}>{r.qty} pcs</span>
+                    <span>JK Normal</span><span style={{ textAlign:"right" }}>{r.jkNormal} jam</span>
+                    <span>JK Lembur</span><span style={{ textAlign:"right", color: r.jkLembur > 0 ? C.org : C.tx3 }}>{r.jkLembur > 0 ? r.jkLembur + " jam" : "-"}</span>
+                    <span>Jumlah Line</span><span style={{ textAlign:"right" }}>{r.lineCount}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // === Fitur Download JPG ===
+  const CHUNK_SIZE = 8 // maks Line per file JPG, biar tidak terlalu lebar
+  const lineChunks = chunkArray(searchedLines, CHUNK_SIZE)
+
+  async function captureAndDownload(el: HTMLElement | null, filename: string) {
+    if (!el) return
+    const html2canvas = (await import("html2canvas")).default
+    const fullW = el.scrollWidth
+    const fullH = el.scrollHeight
+    const canvas = await html2canvas(el, {
+      backgroundColor:"#ffffff", scale:2,
+      width: fullW, height: fullH, windowWidth: fullW, windowHeight: fullH,
+      scrollX: 0, scrollY: 0,
+    })
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92)
+    const a = document.createElement("a")
+    a.href = dataUrl
+    a.download = filename
+    a.click()
+    await new Promise(function(res) { setTimeout(res, 350) }) // beri jarak antar-download biar tidak diblokir browser
+  }
+
+  async function handleDownloadJPG() {
+    setDlBusy(true)
+    try {
+      const factLabel = isAll ? "semua-line" : factory.toLowerCase()
+      if (dlScope === "rekap") {
+        await captureAndDownload(rekapOnlyRef.current, "rekap-buyer_" + factLabel + ".jpg")
+      } else {
+        // "kalender" atau "both": Kalender di-download per-chunk (tetap ikut header Line & kolom Minggu di tiap file)
+        for (let i = 0; i < lineChunks.length; i++) {
+          const suffix = lineChunks.length > 1 ? "_part" + (i + 1) + "of" + lineChunks.length : ""
+          await captureAndDownload(chunkRefs.current[i], "kalender-planning_" + factLabel + suffix + ".jpg")
+        }
+      }
+    } catch (e) {
+      alert("Gagal membuat JPG. Coba lagi.")
+    } finally {
+      setDlBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <span style={{ fontSize:10, color:C.tx3 }}>Download:</span>
+          {([["kalender","Kalender"],["rekap","Rekap Buyer"],["both","Keduanya"]] as [typeof dlScope, string][]).map(function([m, label]) {
+            return (
+              <button key={m} onClick={function() { setDlScope(m) }}
+                style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:dlScope===m?C.gdark:"#fff", color:dlScope===m?"#fff":C.tx2, cursor:"pointer" }}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+        <button onClick={handleDownloadJPG} disabled={dlBusy}
+          style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", fontWeight:500, cursor:dlBusy?"not-allowed":"pointer" }}>
+          {dlBusy ? "Membuat JPG..." : "Download JPG"}
+        </button>
+      </div>
+
+      {lineChunks.length > 1 && (dlScope === "kalender" || dlScope === "both") && (
+        <div style={{ fontSize:9, color:C.tx3, marginBottom:8, fontStyle:"italic" }}>
+          Tabel akan dipecah jadi {lineChunks.length} file JPG ({CHUNK_SIZE} Line per file) karena Line yang ditampilkan cukup banyak — tiap file tetap punya header Line dan kolom Minggu sendiri.
+        </div>
+      )}
+
+      {legendBuyers.length > 1 && (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:10, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
+          {legendBuyers.map(function(b: string) {
+            return (
+              <span key={b} style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:C.tx2 }}>
+                <span style={{ width:10, height:10, borderRadius:2, background:buyerColors[b] }}/>
+                {b}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
+        {/* == PANEL REKAP BUYER (kiri, ikut semua filter di kanan) == */}
+        {renderRekapPanel()}
+
+        {/* == TABEL KALENDER (kanan) == */}
+        <div style={{ flex:1, minWidth:0 }}>
+          {searchedLines.length === 0 ? (
+            <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+              Tidak ada line/buyer yang cocok dengan pencarian "{search}".
+            </div>
+          ) : renderKalenderGrid(searchedLines)}
+          <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+            <span>Freeze kolom Minggu / Line di kiri</span>
+            {data?.fetched_epoch && <span style={{ marginLeft:"auto" }}>Update: {ageLabel(data.fetched_epoch)}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* == KONTAINER TERSEMBUNYI UNTUK CAPTURE JPG (tidak terlihat user, hanya dipakai html2canvas) == */}
+      <div style={{ position:"absolute", left:-99999, top:0, pointerEvents:"none" }} aria-hidden="true">
+        {dlScope === "rekap" && (
+          <div ref={rekapOnlyRef} style={{ background:"#fff", padding:12, display:"inline-block" }}>
+            {renderRekapPanel()}
+          </div>
+        )}
+        {(dlScope === "kalender" || dlScope === "both") && lineChunks.map(function(chunk, i) {
+          return (
+            <div key={i} ref={function(el) { chunkRefs.current[i] = el }} style={{ background:"#fff", padding:12, display:"flex", gap:16, alignItems:"flex-start" }}>
+              {dlScope === "both" && renderRekapPanel()}
+              <div>{renderKalenderGrid(chunk)}</div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -896,13 +927,6 @@ export default function DashboardPage() {
   const [kalenderSearch, setKalenderSearch] = useState("")
   const [kalenderWeekFrom, setKalenderWeekFrom] = useState("")
   const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
-  const [expShow,     setExpShow]     = useState(false)
-  const [expMode,     setExpMode]     = useState<"line"|"buyer"|"factory">("line")
-  const [expLines,    setExpLines]    = useState<string[]>([])
-  const [expBuyers,   setExpBuyers]   = useState<string[]>([])
-  const [expFactories,setExpFactories]= useState<string[]>([])
-  const [expBusy,      setExpBusy]     = useState(false)
-  const exportRef = useRef<HTMLDivElement>(null)
   const [shipmentData,  setShipmentData]  = useState<any>(null)
   const [shipmentLoading,setShipmentLoading] = useState(false)
   const [shipmentSearch, setShipmentSearch]  = useState("")
@@ -1094,12 +1118,6 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setKalenderLoading(false) })
   }, [page, kalenderData])
-
-  useEffect(function() {
-    setExpLines([])
-    setExpBuyers([])
-    setExpFactories([])
-  }, [kalenderFactory, kalenderSearch])
 
   useEffect(function() { aiBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [aiMsgs, aiTyping])
   useEffect(function() { balBottom.current?.scrollIntoView({ behavior:"smooth" }) }, [balMsgs, balTyping])
@@ -1731,164 +1749,8 @@ export default function DashboardPage() {
                   style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
                   Refresh
                 </button>
-                <button onClick={function() { setExpShow(function(v) { return !v }) }}
-                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:expShow?C.gdark:"#fff", color:expShow?"#fff":C.tx2, cursor:"pointer", fontWeight:500 }}>
-                  Export JPG
-                </button>
               </div>
             </div>
-
-            {expShow && kalenderData && (function() {
-              // Semua pool (Line/Buyer/Factory) di bawah ini otomatis ikut Factory tab & Search yang sedang aktif di tabel utama
-              const activeFactories: string[] = kalenderFactory === "__ALL__" ? (kalenderData.factories ?? []) : [kalenderFactory]
-
-              const baseLinesPool = (Array.from(new Set(
-                activeFactories.flatMap(function(f: string) { return kalenderData.lines[f] ?? [] })
-              )) as string[]).sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
-
-              // Rentang minggu ikut "Filter Minggu" di toolbar atas (bukan kontrol sendiri lagi)
-              const weekOptions: string[] = kalenderData.weeks ?? []
-              const fromIdx = weekOptions.indexOf(kalenderWeekFrom) >= 0 ? weekOptions.indexOf(kalenderWeekFrom) : 0
-              const toIdx   = weekOptions.indexOf(kalenderWeekTo)   >= 0 ? weekOptions.indexOf(kalenderWeekTo)   : weekOptions.length - 1
-              const lo = Math.min(fromIdx, toIdx), hi = Math.max(fromIdx, toIdx)
-              const chosenWeeks = weekOptions.slice(lo, hi + 1)
-
-              // Terapkan Search box (kalenderSearch) ke pool Line, sama seperti yang tampil di tabel
-              const allLinesGlobal = kalenderSearch
-                ? baseLinesPool.filter(function(l: string) {
-                    return chosenWeeks.some(function(w: string) {
-                      const found = lookupCell(kalenderData, w, l, kalenderFactory === "__ALL__" ? undefined : activeFactories)
-                      return found && matchSearch({ line:l, buyer:found.cell.buyers.join(" "), fact: found.fact }, kalenderSearch)
-                    })
-                  })
-                : baseLinesPool
-
-              const allBuyersGlobal = Array.from(new Set(
-                activeFactories.flatMap(function(f: string) {
-                  return chosenWeeks.flatMap(function(w: string) {
-                    const byLine = kalenderData.cells[f]?.[w] ?? {}
-                    return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
-                  })
-                })
-              )) as string[]
-
-              let exportLines: string[] = []
-              let restrictFactories: string[] | undefined = undefined
-              let showFactBadge = false
-
-              if (expMode === "line") {
-                exportLines = expLines.length ? expLines : allLinesGlobal
-              } else if (expMode === "factory") {
-                const facts = expFactories.length ? expFactories : activeFactories
-                restrictFactories = facts
-                showFactBadge = facts.length > 1
-                exportLines = (Array.from(new Set(facts.flatMap(function(f: string) { return kalenderData.lines[f] ?? [] }))) as string[])
-                  .sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
-              } else {
-                // mode "buyer": cari Line (dalam Factory aktif) yang punya minimal 1 buyer terpilih di salah satu minggu terpilih
-                const chosenBuyers = expBuyers.length ? expBuyers : allBuyersGlobal
-                restrictFactories = kalenderFactory === "__ALL__" ? undefined : activeFactories
-                exportLines = allLinesGlobal.filter(function(l: string) {
-                  return chosenWeeks.some(function(w: string) {
-                    const found = lookupCell(kalenderData, w, l, restrictFactories)
-                    return found && found.cell.buyers.some(function(b: string) { return chosenBuyers.includes(b) })
-                  })
-                })
-                showFactBadge = kalenderFactory === "__ALL__"
-              }
-
-              function toggleFrom(list: string[], setList: (v: string[]) => void, item: string) {
-                setList(list.includes(item) ? list.filter(function(x) { return x !== item }) : list.concat(item))
-              }
-
-              async function handleDownload() {
-                setExpBusy(true)
-                try {
-                  const html2canvas = (await import("html2canvas")).default
-                  const el = exportRef.current
-                  if (!el) return
-                  // Paksa render di lebar & tinggi PENUH konten (bukan cuma area yang kelihatan di layar/viewport),
-                  // supaya makin banyak Line yang dipilih, hasil JPG makin landscape ke samping, tidak terpotong.
-                  const fullW = el.scrollWidth
-                  const fullH = el.scrollHeight
-                  const canvas = await html2canvas(el, {
-                    backgroundColor:"#ffffff",
-                    scale:2,
-                    width: fullW,
-                    height: fullH,
-                    windowWidth: fullW,
-                    windowHeight: fullH,
-                    scrollX: 0,
-                    scrollY: 0,
-                  })
-                  const dataUrl = canvas.toDataURL("image/jpeg", 0.92)
-                  const a = document.createElement("a")
-                  const fname = "kalender-planning_" + expMode + "_W" + (chosenWeeks[0] ?? "") + "-W" + (chosenWeeks[chosenWeeks.length-1] ?? "") + ".jpg"
-                  a.href = dataUrl
-                  a.download = fname
-                  a.click()
-                } catch (e) {
-                  alert("Gagal membuat JPG. Coba lagi.")
-                } finally {
-                  setExpBusy(false)
-                }
-              }
-
-              return (
-                <div style={{ background:"#f4f7f3", border:"0.5px solid #c8e6c9", borderRadius:8, padding:12, marginBottom:12 }}>
-                  <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-                    {([["line","By Line"],["buyer","By Buyer"],["factory","By Factory"]] as [typeof expMode, string][]).map(function([m, label]) {
-                      return (
-                        <button key={m} onClick={function() { setExpMode(m) }}
-                          style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:expMode===m?C.gdark:"#fff", color:expMode===m?"#fff":C.tx2, cursor:"pointer" }}>
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div style={{ fontSize:9, color:C.tx3, marginBottom:10 }}>
-                    Rentang Minggu: <strong style={{ color:C.gdark }}>Minggu {chosenWeeks[0] ?? "-"} s/d Minggu {chosenWeeks[chosenWeeks.length-1] ?? "-"}</strong> &bull; Factory: <strong style={{ color:C.gdark }}>{kalenderFactory === "__ALL__" ? "Semua Line" : kalenderFactory}</strong>
-                    {kalenderSearch && <> &bull; Search: <strong style={{ color:C.gdark }}>"{kalenderSearch}"</strong></>}
-                    {" "}<span style={{ fontStyle:"italic" }}>(ikut Filter Minggu, Factory, dan Search di toolbar atas)</span>
-                  </div>
-
-                  <div style={{ marginBottom:10 }}>
-                    <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", marginBottom:4 }}>
-                      {expMode === "line" ? "Pilih Line (kosongkan = semua)" : expMode === "buyer" ? "Pilih Buyer (kosongkan = semua)" : "Pilih Factory (kosongkan = semua)"}
-                    </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:5, maxHeight:80, overflowY:"auto" }}>
-                      {(expMode === "line" ? allLinesGlobal : expMode === "buyer" ? allBuyersGlobal : activeFactories).map(function(item: string) {
-                        const list  = expMode === "line" ? expLines : expMode === "buyer" ? expBuyers : expFactories
-                        const setFn = expMode === "line" ? setExpLines : expMode === "buyer" ? setExpBuyers : setExpFactories
-                        const active = list.includes(item)
-                        return (
-                          <button key={item} onClick={function() { toggleFrom(list, setFn, item) }}
-                            style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:active?C.gdark:"#fff", color:active?"#fff":C.tx2, cursor:"pointer" }}>
-                            {item}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize:9, color:C.tx3, marginBottom:6 }}>
-                    Preview: {chosenWeeks.length} minggu &times; {exportLines.length} line
-                  </div>
-
-                  <div style={{ overflowX:"auto", border:"0.5px solid #c8e6c9", borderRadius:6, background:"#fff" }}>
-                    <div ref={exportRef}>
-                      <ExportTable data={kalenderData} weeks={chosenWeeks} lines={exportLines} restrictFactories={restrictFactories} showFactBadge={showFactBadge}/>
-                    </div>
-                  </div>
-
-                  <button onClick={handleDownload} disabled={expBusy}
-                    style={{ marginTop:10, fontSize:11, fontWeight:600, padding:"7px 16px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", cursor:expBusy?"not-allowed":"pointer" }}>
-                    {expBusy ? "Membuat JPG..." : "Download JPG"}
-                  </button>
-                </div>
-              )
-            })()}
 
             <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch} weekFrom={kalenderWeekFrom} weekTo={kalenderWeekTo}/>
           </div>
