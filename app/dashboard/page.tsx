@@ -64,7 +64,7 @@ function SearchBox(props: { value: string; onChange: (v: string) => void; placeh
 function matchSearch(row: any, q: string) {
   if (!q) return true
   const needle = q.toLowerCase()
-  const haystack = [row.line, row.spo, row.style, row.buyer].filter(Boolean).join(" ").toLowerCase()
+  const haystack = [row.line, row.spo, row.style, row.buyer, row.fact].filter(Boolean).join(" ").toLowerCase()
   return haystack.indexOf(needle) !== -1
 }
 
@@ -660,10 +660,12 @@ type KalenderProps = {
   factory: string
   search: string
   setSearch: (v: string) => void
+  weekFrom: string
+  weekTo: string
 }
 
 function KalenderTable(props: KalenderProps) {
-  const { loading, data, factory, search, setSearch } = props
+  const { loading, data, factory, search, setSearch, weekFrom, weekTo } = props
   if (loading) return (
     <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
       Memuat data dari sheet Kalender Planning...
@@ -683,7 +685,11 @@ function KalenderTable(props: KalenderProps) {
         .sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
     : (data.lines[factory] ?? [])
 
-  const weeks: string[] = data.weeks ?? []
+  const allWeeks: string[] = data.weeks ?? []
+  const fromIdx = allWeeks.indexOf(weekFrom) >= 0 ? allWeeks.indexOf(weekFrom) : 0
+  const toIdx   = allWeeks.indexOf(weekTo)   >= 0 ? allWeeks.indexOf(weekTo)   : allWeeks.length - 1
+  const wLo = Math.min(fromIdx, toIdx), wHi = Math.max(fromIdx, toIdx)
+  const weeks: string[] = allWeeks.slice(wLo, wHi + 1)
 
   // Gabungkan cells dari semua Factory kalau mode "Semua Line" dipilih.
   // Digabung PER MINGGU (bukan global per-Line) supaya kasus 1 Line pindah Factory
@@ -717,7 +723,7 @@ function KalenderTable(props: KalenderProps) {
     ? allLines.filter(function(l: string) {
         return weeks.some(function(w: string) {
           const c = cellsForFactory[w]?.[l]
-          return c && matchSearch({ line:l, buyer:c.buyers.join(" ") }, search)
+          return c && matchSearch({ line:l, buyer:c.buyers.join(" "), fact: c._fact ?? factory }, search)
         })
       })
     : allLines
@@ -733,7 +739,7 @@ function KalenderTable(props: KalenderProps) {
 
   return (
     <div>
-      <SearchBox value={search} onChange={setSearch} placeholder="Cari line atau buyer..." resultCount={searchedLines.length}/>
+      <SearchBox value={search} onChange={setSearch} placeholder="Cari line, buyer, atau factory..." resultCount={searchedLines.length}/>
 
       {legendBuyers.length > 1 && (
         <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:10, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
@@ -861,6 +867,8 @@ export default function DashboardPage() {
   const [kalenderLoading,setKalenderLoading]= useState(false)
   const [kalenderFactory,setKalenderFactory]= useState("K")
   const [kalenderSearch, setKalenderSearch] = useState("")
+  const [kalenderWeekFrom, setKalenderWeekFrom] = useState("")
+  const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
   const [rekapWeekFrom, setRekapWeekFrom] = useState("")
   const [rekapWeekTo,   setRekapWeekTo]   = useState("")
   const [expShow,     setExpShow]     = useState(false)
@@ -1683,6 +1691,27 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {kalenderData?.weeks && (
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:12 }}>
+                <span style={{ fontSize:10, color:C.tx3 }}>Filter Minggu:</span>
+                <select value={kalenderWeekFrom || kalenderData.weeks[0] || ""} onChange={function(e) { setKalenderWeekFrom(e.target.value) }}
+                  style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                  {kalenderData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                </select>
+                <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
+                <select value={kalenderWeekTo || kalenderData.weeks[kalenderData.weeks.length-1] || ""} onChange={function(e) { setKalenderWeekTo(e.target.value) }}
+                  style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                  {kalenderData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                </select>
+                {(kalenderWeekFrom || kalenderWeekTo) && (
+                  <button onClick={function() { setKalenderWeekFrom(""); setKalenderWeekTo("") }}
+                    style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                    Reset
+                  </button>
+                )}
+              </div>
+            )}
+
             {expShow && kalenderData && (function() {
               const allLinesGlobal = (Array.from(new Set(
                 (kalenderData.factories ?? []).flatMap(function(f: string) { return kalenderData.lines[f] ?? [] })
@@ -1830,7 +1859,7 @@ export default function DashboardPage() {
               )
             })()}
 
-            <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch}/>
+            <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch} weekFrom={kalenderWeekFrom} weekTo={kalenderWeekTo}/>
 
             {/* == REKAP BUYER (agregat, exclude Line K12 & A27) == */}
             {kalenderData && (function() {
