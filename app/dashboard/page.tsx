@@ -806,13 +806,14 @@ function KalenderTable(props: KalenderProps) {
     setDlBusy(true)
     try {
       const factLabel = isAll ? "semua-line" : factory.toLowerCase()
+      const weekLabel = weeks.length ? ("_W" + weeks[0] + "-W" + weeks[weeks.length - 1]) : ""
       if (dlScope === "rekap") {
-        await captureAndDownload(rekapOnlyRef.current, "rekap-buyer_" + factLabel + ".jpg")
+        await captureAndDownload(rekapOnlyRef.current, "rekap-buyer_" + factLabel + weekLabel + ".jpg")
       } else {
         // "kalender" atau "both": Kalender di-download per-chunk (tetap ikut header Line & kolom Minggu di tiap file)
         for (let i = 0; i < lineChunks.length; i++) {
           const suffix = lineChunks.length > 1 ? "_part" + (i + 1) + "of" + lineChunks.length : ""
-          await captureAndDownload(chunkRefs.current[i], "kalender-planning_" + factLabel + suffix + ".jpg")
+          await captureAndDownload(chunkRefs.current[i], "kalender-planning_" + factLabel + weekLabel + suffix + ".jpg")
         }
       }
     } catch (e) {
@@ -824,7 +825,7 @@ function KalenderTable(props: KalenderProps) {
 
   return (
     <div>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8, marginBottom:6 }}>
         <div style={{ display:"flex", gap:6, alignItems:"center" }}>
           <span style={{ fontSize:10, color:C.tx3 }}>Download:</span>
           {([["kalender","Kalender"],["rekap","Rekap Buyer"],["both","Keduanya"]] as [typeof dlScope, string][]).map(function([m, label]) {
@@ -840,6 +841,13 @@ function KalenderTable(props: KalenderProps) {
           style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", fontWeight:500, cursor:dlBusy?"not-allowed":"pointer" }}>
           {dlBusy ? "Membuat JPG..." : "Download JPG"}
         </button>
+      </div>
+
+      <div style={{ fontSize:9, color:C.tx3, marginBottom:8 }}>
+        Yang akan di-download — Minggu: <strong style={{ color:C.gdark }}>{weeks[0] ?? "-"} s/d {weeks[weeks.length-1] ?? "-"}</strong>
+        {" "}({weeks.length} minggu) &bull; Factory: <strong style={{ color:C.gdark }}>{isAll ? "Semua Line" : factory}</strong>
+        {" "}&bull; Line: <strong style={{ color:C.gdark }}>{searchedLines.length}</strong>
+        {search && <> &bull; Search: <strong style={{ color:C.gdark }}>"{search}"</strong></>}
       </div>
 
       {lineChunks.length > 1 && (dlScope === "kalender" || dlScope === "both") && (
