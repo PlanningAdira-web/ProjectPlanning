@@ -1796,36 +1796,46 @@ export default function DashboardPage() {
               const catSetFn = kalenderFilterCat === "factory" ? setKalenderFilterFactory : kalenderFilterCat === "line" ? setKalenderFilterLine : setKalenderFilterBuyer
 
               return (
-                <div style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:12, flexWrap:"wrap" }}>
-                  <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-                    <span style={{ fontSize:10, color:C.tx3, alignSelf:"center", marginRight:2 }}>Filter by:</span>
-                    {([["factory","Factory"],["line","Line"],["buyer","Buyer"]] as [typeof kalenderFilterCat, string][]).map(function([cat, label]) {
-                      return (
-                        <button key={cat} onClick={function() { setKalenderFilterCat(cat) }}
-                          style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
-                            background:kalenderFilterCat===cat?C.gdark:"#fff", color:kalenderFilterCat===cat?"#fff":C.tx2, cursor:"pointer", fontWeight:500 }}>
-                          {label}
-                        </button>
-                      )
-                    })}
+                <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", flexDirection:"column", gap:3, flexShrink:0 }}>
+                    <span style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", letterSpacing:".03em" }}>Filter by</span>
+                    <div style={{ display:"flex", gap:2, background:"#e3ebe0", borderRadius:999, padding:3 }}>
+                      {([["factory","Factory"],["line","Line"],["buyer","Buyer"]] as [typeof kalenderFilterCat, string][]).map(function([cat, label]) {
+                        return (
+                          <button key={cat} onClick={function() { setKalenderFilterCat(cat) }}
+                            style={{ fontSize:11, padding:"5px 14px", borderRadius:999, border:"none",
+                              background:kalenderFilterCat===cat?C.gdark:"transparent", color:kalenderFilterCat===cat?"#fff":C.tx2, cursor:"pointer", fontWeight:600 }}>
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1, minWidth:200 }}>
-                    {catList.map(function(item: string) {
-                      const active = catValue.includes(item)
-                      return (
-                        <button key={item} onClick={function() { toggleFrom(catValue, catSetFn, item) }}
-                          style={{ fontSize:10, padding:"3px 9px", borderRadius:6, border:"0.5px solid #c8e6c9", background:active?C.gdark:"#fff", color:active?"#fff":C.tx2, cursor:"pointer" }}>
-                          {item}
+                  <div style={{ display:"flex", alignItems:"center", color:C.tx3, fontSize:14, alignSelf:"center", marginTop:14 }}>&rarr;</div>
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:3, flex:1, minWidth:220 }}>
+                    <span style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", letterSpacing:".03em" }}>
+                      Pilih {kalenderFilterCat === "factory" ? "Factory" : kalenderFilterCat === "line" ? "Line" : "Buyer"} (kosongkan = semua)
+                    </span>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, background:"#fbfaf5", border:"1px dashed #e0c88a", borderRadius:8, padding:"8px 10px" }}>
+                      {catList.map(function(item: string) {
+                        const active = catValue.includes(item)
+                        return (
+                          <button key={item} onClick={function() { toggleFrom(catValue, catSetFn, item) }}
+                            style={{ fontSize:10.5, padding:"4px 10px", borderRadius:999, border: active ? "none" : "0.5px solid #e0c88a",
+                              background:active?C.org:"#fff", color:active?"#fff":"#8a6d1a", cursor:"pointer", fontWeight:active?600:400 }}>
+                            {item}
+                          </button>
+                        )
+                      })}
+                      {catValue.length > 0 && (
+                        <button onClick={function() { catSetFn([]) }}
+                          style={{ fontSize:10.5, padding:"4px 10px", borderRadius:999, border:"0.5px solid #e0c88a", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+                          Reset
                         </button>
-                      )
-                    })}
-                    {catValue.length > 0 && (
-                      <button onClick={function() { catSetFn([]) }}
-                        style={{ fontSize:10, padding:"3px 9px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.org, cursor:"pointer" }}>
-                        Reset
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               )
