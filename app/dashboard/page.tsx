@@ -540,15 +540,18 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 type KalenderProps = {
   loading: boolean
   data: any
-  factory: string
   search: string
   setSearch: (v: string) => void
   weekFrom: string
   weekTo: string
+  filterCat: "factory"|"line"|"buyer"
+  filterFactory: string[]
+  filterLine: string[]
+  filterBuyer: string[]
 }
 
 function KalenderTable(props: KalenderProps) {
-  const { loading, data, factory, search, setSearch, weekFrom, weekTo } = props
+  const { loading, data, search, setSearch, weekFrom, weekTo, filterCat, filterFactory, filterLine, filterBuyer } = props
   const [dlScope, setDlScope] = useState<"kalender"|"rekap"|"both">("both")
   const [dlBusy,  setDlBusy]  = useState(false)
   const chunkRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -565,13 +568,11 @@ function KalenderTable(props: KalenderProps) {
     </div>
   )
 
-  const isAll = factory === "__ALL__"
   const allFactories: string[] = data.factories ?? []
 
-  const allLines: string[] = isAll
-    ? Array.from(new Set(allFactories.flatMap(function(f: string) { return data.lines[f] ?? [] })))
-        .sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
-    : (data.lines[factory] ?? [])
+  const allLines: string[] = (Array.from(new Set(
+    allFactories.flatMap(function(f: string) { return data.lines[f] ?? [] })
+  )) as string[]).sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
 
   const allWeeks: string[] = data.weeks ?? []
   const fromIdx = allWeeks.indexOf(weekFrom) >= 0 ? allWeeks.indexOf(weekFrom) : 0
@@ -579,42 +580,56 @@ function KalenderTable(props: KalenderProps) {
   const wLo = Math.min(fromIdx, toIdx), wHi = Math.max(fromIdx, toIdx)
   const weeks: string[] = allWeeks.slice(wLo, wHi + 1)
 
-  // Gabungkan cells dari semua Factory kalau mode "Semua Line" dipilih.
+  // Selalu gabungkan cells dari SEMUA Factory (tombol tab Factory sudah dihapus, diganti Filter by Factory/Line/Buyer).
   // Digabung PER MINGGU (bukan global per-Line) supaya kasus 1 Line pindah Factory
-  // antar-minggu (mis. K49 di Factory F minggu 35, lalu pindah ke Factory K minggu 37) tetap benar,
-  // masing-masing minggu tetap mengacu ke Factory yang sesuai untuk minggu itu.
-  const cellsForFactory: Record<string, Record<string, any>> = isAll
-    ? allFactories.reduce(function(acc: any, f: string) {
-        const byWeek = data.cells[f] ?? {}
-        Object.keys(byWeek).forEach(function(w: string) {
-          if (!acc[w]) acc[w] = {}
-          Object.keys(byWeek[w]).forEach(function(line: string) {
-            // Tandai Factory asal per cell (dipakai buat badge di mode "Semua Line")
-            acc[w][line] = Object.assign({}, byWeek[w][line], { _fact: f })
-          })
-        })
-        return acc
-      }, {})
-    : (data.cells[factory] ?? {})
+  // antar-minggu (mis. K49 di Factory F minggu 35, lalu pindah ke Factory K minggu 37) tetap benar.
+  const cellsForFactory: Record<string, Record<string, any>> = allFactories.reduce(function(acc: any, f: string) {
+    const byWeek = data.cells[f] ?? {}
+    Object.keys(byWeek).forEach(function(w: string) {
+      if (!acc[w]) acc[w] = {}
+      Object.keys(byWeek[w]).forEach(function(line: string) {
+        // Tandai Factory asal per cell (dipakai buat badge)
+        acc[w][line] = Object.assign({}, byWeek[w][line], { _fact: f })
+      })
+    })
+    return acc
+  }, {})
 
   const buyerColors = buildBuyerColorMap(data)
 
-  // Legend hanya untuk buyer yang muncul di Factory (atau semua Factory) yang sedang dipilih
+  // Legend hanya untuk buyer yang muncul di data yang sedang aktif
   const legendBuyers = Array.from(new Set(
     Object.values(cellsForFactory).flatMap(function(byLine: any) {
       return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
     })
   )) as string[]
 
+  // Filter by Factory / Line / Buyer (kosongkan pilihan = tidak membatasi apa-apa)
+  let catFilteredLines = allLines
+  if (filterCat === "factory" && filterFactory.length) {
+    catFilteredLines = allLines.filter(function(l: string) {
+      return filterFactory.some(function(f: string) { return (data.lines[f] ?? []).includes(l) })
+    })
+  } else if (filterCat === "line" && filterLine.length) {
+    catFilteredLines = allLines.filter(function(l: string) { return filterLine.includes(l) })
+  } else if (filterCat === "buyer" && filterBuyer.length) {
+    catFilteredLines = allLines.filter(function(l: string) {
+      return weeks.some(function(w: string) {
+        const c = cellsForFactory[w]?.[l]
+        return c && c.buyers.some(function(b: string) { return filterBuyer.includes(b) })
+      })
+    })
+  }
+
   // Kalau search mengetik nama buyer, tetap tampilkan semua line yang punya baris cocok di minggu manapun
   const searchedLines = search
-    ? allLines.filter(function(l: string) {
+    ? catFilteredLines.filter(function(l: string) {
         return weeks.some(function(w: string) {
           const c = cellsForFactory[w]?.[l]
-          return c && matchSearch({ line:l, buyer:c.buyers.join(" "), fact: c._fact ?? factory }, search)
+          return c && matchSearch({ line:l, buyer:c.buyers.join(" "), fact: c._fact }, search)
         })
       })
-    : allLines
+    : catFilteredLines
 
   // Rekap Buyer: dihitung dari weeks + searchedLines + cellsForFactory yang SAMA dengan tabel di kanan,
   // jadi otomatis ikut Filter Minggu, Factory, dan Search yang sedang aktif. Line K12 & A27 dikecualikan.
@@ -670,7 +685,7 @@ function KalenderTable(props: KalenderProps) {
     })
     return (
       <>
-        {isAll && c._fact && (
+        {c._fact && (
           <span style={{ display:"inline-block", fontSize:9, fontWeight:600, color:"#fff", background:C.gdark, padding:"1px 6px", borderRadius:4, marginBottom:5 }}>
             Factory {c._fact}
           </span>
@@ -811,7 +826,11 @@ function KalenderTable(props: KalenderProps) {
   async function handleDownloadJPG() {
     setDlBusy(true)
     try {
-      const factLabel = isAll ? "semua-line" : factory.toLowerCase()
+      const filterLabel = filterCat === "factory" && filterFactory.length ? filterFactory.join("-").toLowerCase()
+        : filterCat === "line" && filterLine.length ? "line-" + filterLine.length + "pcs"
+        : filterCat === "buyer" && filterBuyer.length ? filterBuyer.join("-").toLowerCase().replace(/\s+/g, "")
+        : "semua"
+      const factLabel = filterLabel
       const weekLabel = weeks.length ? ("_W" + weeks[0] + "-W" + weeks[weeks.length - 1]) : ""
       if (dlScope === "rekap") {
         await captureAndDownload(rekapOnlyRef.current, "rekap-buyer_" + factLabel + weekLabel + ".jpg")
@@ -851,8 +870,12 @@ function KalenderTable(props: KalenderProps) {
 
       <div style={{ fontSize:9, color:C.tx3, marginBottom:8 }}>
         Yang akan di-download — Minggu: <strong style={{ color:C.gdark }}>{weeks[0] ?? "-"} s/d {weeks[weeks.length-1] ?? "-"}</strong>
-        {" "}({weeks.length} minggu) &bull; Factory: <strong style={{ color:C.gdark }}>{isAll ? "Semua Line" : factory}</strong>
-        {" "}&bull; Line: <strong style={{ color:C.gdark }}>{searchedLines.length}</strong>
+        {" "}({weeks.length} minggu) &bull; Filter by {filterCat === "factory" ? "Factory" : filterCat === "line" ? "Line" : "Buyer"}: <strong style={{ color:C.gdark }}>
+          {(filterCat === "factory" ? filterFactory : filterCat === "line" ? filterLine : filterBuyer).length
+            ? (filterCat === "factory" ? filterFactory : filterCat === "line" ? filterLine : filterBuyer).join(", ")
+            : "Semua"}
+        </strong>
+        {" "}&bull; Line tampil: <strong style={{ color:C.gdark }}>{searchedLines.length}</strong>
         {search && <> &bull; Search: <strong style={{ color:C.gdark }}>"{search}"</strong></>}
       </div>
 
@@ -937,7 +960,10 @@ export default function DashboardPage() {
   const [planSewSearch, setPlanSewSearch] = useState("")
   const [kalenderData,   setKalenderData]   = useState<any>(null)
   const [kalenderLoading,setKalenderLoading]= useState(false)
-  const [kalenderFactory,setKalenderFactory]= useState("__ALL__")
+  const [kalenderFilterCat,     setKalenderFilterCat]     = useState<"factory"|"line"|"buyer">("factory")
+  const [kalenderFilterFactory, setKalenderFilterFactory] = useState<string[]>([])
+  const [kalenderFilterLine,    setKalenderFilterLine]    = useState<string[]>([])
+  const [kalenderFilterBuyer,   setKalenderFilterBuyer]   = useState<string[]>([])
   const [kalenderSearch, setKalenderSearch] = useState("")
   const [kalenderWeekFrom, setKalenderWeekFrom] = useState("")
   const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
@@ -1742,31 +1768,75 @@ export default function DashboardPage() {
                 </>
               )}
 
-              <div style={{ display:"flex", gap:6, alignItems:"center", marginLeft:"auto", flexWrap:"wrap" }}>
-                <button onClick={function() { setKalenderFactory("__ALL__") }}
-                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
-                    background:kalenderFactory==="__ALL__"?C.gdark:"#fff",
-                    color:kalenderFactory==="__ALL__"?"#fff":C.tx2, cursor:"pointer", fontWeight:500 }}>
-                  Semua Line
-                </button>
-                {kalenderData?.factories?.map(function(f: string) {
-                  return (
-                    <button key={f} onClick={function() { setKalenderFactory(f) }}
-                      style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
-                        background:kalenderFactory===f?C.gdark:"#fff",
-                        color:kalenderFactory===f?"#fff":C.tx2, cursor:"pointer" }}>
-                      Line {f}
-                    </button>
-                  )
-                })}
-                <button onClick={function() { setKalenderData(null) }}
-                  style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer" }}>
-                  Refresh
-                </button>
-              </div>
+              <button onClick={function() { setKalenderData(null) }}
+                style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer", marginLeft:"auto" }}>
+                Refresh
+              </button>
             </div>
 
-            <KalenderTable loading={kalenderLoading} data={kalenderData} factory={kalenderFactory} search={kalenderSearch} setSearch={setKalenderSearch} weekFrom={kalenderWeekFrom} weekTo={kalenderWeekTo}/>
+            {kalenderData && (function() {
+              const allFactoriesList: string[] = kalenderData.factories ?? []
+              const allLinesList: string[] = (Array.from(new Set(
+                allFactoriesList.flatMap(function(f: string) { return kalenderData.lines[f] ?? [] })
+              )) as string[]).sort(function(a: string, b: string) { return a.localeCompare(b, undefined, { numeric:true }) })
+              const allBuyersList: string[] = Array.from(new Set(
+                allFactoriesList.flatMap(function(f: string) {
+                  return Object.values(kalenderData.cells[f] ?? {}).flatMap(function(byLine: any) {
+                    return Object.values(byLine).flatMap(function(c: any) { return c.buyers ?? [] })
+                  })
+                })
+              )) as string[]
+
+              function toggleFrom(list: string[], setList: (v: string[]) => void, item: string) {
+                setList(list.includes(item) ? list.filter(function(x) { return x !== item }) : list.concat(item))
+              }
+
+              const catList  = kalenderFilterCat === "factory" ? allFactoriesList : kalenderFilterCat === "line" ? allLinesList : allBuyersList
+              const catValue = kalenderFilterCat === "factory" ? kalenderFilterFactory : kalenderFilterCat === "line" ? kalenderFilterLine : kalenderFilterBuyer
+              const catSetFn = kalenderFilterCat === "factory" ? setKalenderFilterFactory : kalenderFilterCat === "line" ? setKalenderFilterLine : setKalenderFilterBuyer
+
+              return (
+                <div style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                    <span style={{ fontSize:10, color:C.tx3, alignSelf:"center", marginRight:2 }}>Filter by:</span>
+                    {([["factory","Factory"],["line","Line"],["buyer","Buyer"]] as [typeof kalenderFilterCat, string][]).map(function([cat, label]) {
+                      return (
+                        <button key={cat} onClick={function() { setKalenderFilterCat(cat) }}
+                          style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9",
+                            background:kalenderFilterCat===cat?C.gdark:"#fff", color:kalenderFilterCat===cat?"#fff":C.tx2, cursor:"pointer", fontWeight:500 }}>
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, flex:1, minWidth:200 }}>
+                    {catList.map(function(item: string) {
+                      const active = catValue.includes(item)
+                      return (
+                        <button key={item} onClick={function() { toggleFrom(catValue, catSetFn, item) }}
+                          style={{ fontSize:10, padding:"3px 9px", borderRadius:6, border:"0.5px solid #c8e6c9", background:active?C.gdark:"#fff", color:active?"#fff":C.tx2, cursor:"pointer" }}>
+                          {item}
+                        </button>
+                      )
+                    })}
+                    {catValue.length > 0 && (
+                      <button onClick={function() { catSetFn([]) }}
+                        style={{ fontSize:10, padding:"3px 9px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.org, cursor:"pointer" }}>
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+
+            <KalenderTable
+              loading={kalenderLoading} data={kalenderData}
+              search={kalenderSearch} setSearch={setKalenderSearch}
+              weekFrom={kalenderWeekFrom} weekTo={kalenderWeekTo}
+              filterCat={kalenderFilterCat} filterFactory={kalenderFilterFactory} filterLine={kalenderFilterLine} filterBuyer={kalenderFilterBuyer}
+            />
           </div>
         )}
 
