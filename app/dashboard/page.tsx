@@ -609,6 +609,49 @@ function DistBar(props: { segments: { color: string; pct: number; label: string 
   )
 }
 
+// CSS hover-only untuk pop up instan (tanpa JS state, supaya ringan dipakai di ratusan cell tabel)
+const SIZE_TOOLTIP_STYLE = "\n.szt-wrap{position:relative;display:inline-block;cursor:help;}\n.szt-wrap .szt-pop{display:none;position:absolute;z-index:200;top:100%;left:0;margin-top:4px;background:#1a2e1c;color:#fff;border-radius:6px;padding:8px 10px;font-size:10px;min-width:150px;box-shadow:0 4px 14px rgba(0,0,0,.28);white-space:nowrap;}\n.szt-wrap:hover .szt-pop{display:block;}\n.szt-pop-title{font-weight:600;margin-bottom:4px;color:#a5d6a7;text-transform:uppercase;font-size:9px;letter-spacing:.03em;}\n.szt-pop-row{display:flex;justify-content:space-between;gap:14px;padding:1px 0;}\n"
+
+// Cell dengan pop up hover instan berisi rincian per Size (atau info "kekurangan set" untuk Env/Inner/Carton)
+function SizeTooltipCell(props: {
+  display: React.ReactNode
+  sizeRows?: { size: string; value: number }[]
+  setInfo?: { value: number }
+}) {
+  const hasSizeRows = props.sizeRows && props.sizeRows.length > 0
+  const hasSetInfo  = !!props.setInfo
+  if (!hasSizeRows && !hasSetInfo) return <>{props.display}</>
+
+  return (
+    <span className="szt-wrap">
+      {props.display}
+      <span className="szt-pop">
+        {hasSizeRows ? (
+          <>
+            <div className="szt-pop-title">Rincian per Size</div>
+            {props.sizeRows!.map(function(rr, i) {
+              return (
+                <div className="szt-pop-row" key={i}>
+                  <span>{rr.size || "-"}</span>
+                  <span style={{ fontWeight:600 }}>{rr.value.toLocaleString("en-US")}</span>
+                </div>
+              )
+            })}
+          </>
+        ) : (
+          <>
+            <div className="szt-pop-title">Kekurangan Set</div>
+            <div className="szt-pop-row">
+              <span>Berlaku semua ukuran</span>
+              <span style={{ fontWeight:600 }}>{(props.setInfo!.value).toLocaleString("en-US")}</span>
+            </div>
+          </>
+        )}
+      </span>
+    </span>
+  )
+}
+
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
@@ -1060,6 +1103,7 @@ export default function DashboardPage() {
   const [shipmentBuyers, setShipmentBuyers] = useState<string[]>([])
   const [shipmentWeeks,  setShipmentWeeks]  = useState<number[]>([])
   const shipmentDefaultWeekApplied = useRef(false)
+  const [kekuranganData, setKekuranganData] = useState<any>(null)
   const [shipmentBuyerOpen, setShipmentBuyerOpen] = useState(false)
   const [shipmentWeekOpen,  setShipmentWeekOpen]  = useState(false)
   const [jobdescs,       setJobdescs]       = useState<any[]>([])
@@ -1228,6 +1272,15 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setShipmentLoading(false) })
   }, [page, shipmentData])
+
+  useEffect(function() {
+    if (page !== "shipment") return
+    if (kekuranganData) return
+    fetch("/api/kekurangan-shipment")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setKekuranganData(d.data) })
+      .catch(function() {})
+  }, [page, kekuranganData])
 
   useEffect(function() {
     if (page !== "matset") return
@@ -2156,6 +2209,7 @@ export default function DashboardPage() {
 
               return (
                 <div>
+                  <style>{SIZE_TOOLTIP_STYLE}</style>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:8, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
                     <span style={{ fontSize:9, fontWeight:600, color:C.tx3, textTransform:"uppercase" }}>Status SPO:</span>
                     {SHIPMENT_STATUS_LEGEND.map(function(st) {
@@ -2223,6 +2277,7 @@ export default function DashboardPage() {
                           const weekSep = prev && prev.week !== r.week
                           const spacerTd = <td style={{ background:"#f4f7f3", borderLeft:"1px dashed #c8c4b8", borderRight:"1px dashed #c8c4b8", borderBottom:"0.5px solid #cfe0cc" }}></td>
                           const st = shipmentStatus(r.export_date)
+                          const kgroup = kekuranganData?.bySpo?.[r.spo]
                           return (
                             <tr key={i} style={{ borderTop: weekSep ? "2px solid #a5d6a7" : "none" }}>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.export_date}</td>
@@ -2237,15 +2292,31 @@ export default function DashboardPage() {
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.buyer}</td>
                               <td style={{ background:"#f3e5f5", padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10, fontWeight:500, color:"#6a1b9a" }}>{r.grouping_buyer}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.dest_country}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment ? Number(r.qty_shipment).toLocaleString("en-US") : ""}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.shipped ? Number(r.shipped).toLocaleString("en-US") : ""}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_dst)}</td>
-                              <td style={{ background:"#bbdefb", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{fmtN(r.kk_glove)}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>
+                                <SizeTooltipCell display={r.qty_shipment ? Number(r.qty_shipment).toLocaleString("en-US") : ""} sizeRows={kgroup?.sizes.map(function(s: any) { return { size:s.size, value:s.qty_shipment_pcs } })}/>
+                              </td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>
+                                <SizeTooltipCell display={r.shipped ? Number(r.shipped).toLocaleString("en-US") : ""} sizeRows={kgroup?.sizes.map(function(s: any) { return { size:s.size, value:s.shipped } })}/>
+                              </td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>
+                                <SizeTooltipCell display={fmtN(r.kk_dst)} sizeRows={kgroup?.sizes.map(function(s: any) { return { size:s.size, value:s.kk_dst } })}/>
+                              </td>
+                              <td style={{ background:"#bbdefb", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>
+                                <SizeTooltipCell display={fmtN(r.kk_glove)} sizeRows={kgroup?.sizes.map(function(s: any) { return { size:s.size, value:s.kk_glove } })}/>
+                              </td>
                               {spacerTd}
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment2 ? Number(r.qty_shipment2).toLocaleString("en-US") : ""}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_env)}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_inner)}</td>
-                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{fmtN(r.kk_carton)}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>
+                                <SizeTooltipCell display={r.qty_shipment2 ? Number(r.qty_shipment2).toLocaleString("en-US") : ""} sizeRows={kgroup?.sizes.map(function(s: any) { return { size:s.size, value:s.qty_shipment_date } })}/>
+                              </td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>
+                                <SizeTooltipCell display={fmtN(r.kk_env)} setInfo={kgroup ? { value:kgroup.kk_env } : undefined}/>
+                              </td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>
+                                <SizeTooltipCell display={fmtN(r.kk_inner)} setInfo={kgroup ? { value:kgroup.kk_inner } : undefined}/>
+                              </td>
+                              <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>
+                                <SizeTooltipCell display={fmtN(r.kk_carton)} setInfo={kgroup ? { value:kgroup.kk_carton } : undefined}/>
+                              </td>
                               {spacerTd}
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.line}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{r.factory}</td>
