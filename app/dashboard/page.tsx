@@ -2019,16 +2019,24 @@ export default function DashboardPage() {
                             {h:"SPO",                 a:"left",   bg:"#1a5c2a", w:70},
                             {h:"Style",               a:"left",   bg:"#1a5c2a", w:190},
                             {h:"Buyer",               a:"left",   bg:"#1a5c2a", w:120},
+                            {h:"Grouping Buyer",      a:"left",   bg:"#7b1fa2", w:100},
                             {h:"Dest. Country",       a:"left",   bg:"#1a5c2a", w:90},
-                            {h:"Qty Shipment / pcs",  a:"right",  bg:"#1a5c2a", w:75},
+                            {h:"Qty Shipment Glove / pcs",   a:"right",  bg:"#1a5c2a", w:80},
                             {h:"Shipped",             a:"right",  bg:"#1a5c2a", w:60},
                             {h:"KK DST",              a:"right",  bg:"#a32d2d", w:65},
-                            {h:"KK Glove",            a:"right",  bg:"#7b1fa2", w:65},
-                            {h:"Qty Shipment / Date", a:"right",  bg:"#1a5c2a", w:75},
+                            {h:"KK Glove",            a:"right",  bg:"#0d47a1", w:65},
+                            {spacer:true, w:14},
+                            {h:"Qty Shipment Packing / Date", a:"right",  bg:"#1a5c2a", w:85},
                             {h:"Kekurangan Env",      a:"right",  bg:"#c62828", w:75},
                             {h:"Kekurangan Inner",    a:"right",  bg:"#c62828", w:75},
                             {h:"Kekurangan Carton",   a:"right",  bg:"#c62828", w:75},
-                          ].map(function(col, i) {
+                            {spacer:true, w:14},
+                            {h:"Line",                a:"left",   bg:"#ad1457", w:90},
+                            {h:"Factory",             a:"left",   bg:"#ad1457", w:70},
+                          ].map(function(col: any, i) {
+                            if (col.spacer) {
+                              return <th key={i} style={{ position:"sticky", top:0, zIndex:2, background:"#f4f7f3", minWidth:col.w, borderLeft:"1px dashed #c8c4b8", borderRight:"1px dashed #c8c4b8" }}></th>
+                            }
                             return (
                               <th key={i} style={{
                                 position:"sticky", top:0, zIndex:2,
@@ -2050,6 +2058,7 @@ export default function DashboardPage() {
                           const wc  = wcMap[r.week] ?? WEEK_COLORS[0]
                           const prev = i > 0 ? filtered[i-1] : null
                           const weekSep = prev && prev.week !== r.week
+                          const spacerTd = <td style={{ background:"#f4f7f3", borderLeft:"1px dashed #c8c4b8", borderRight:"1px dashed #c8c4b8", borderBottom:"0.5px solid #cfe0cc" }}></td>
                           return (
                             <tr key={i} style={{ borderTop: weekSep ? "2px solid #a5d6a7" : "none" }}>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.export_date}</td>
@@ -2057,15 +2066,20 @@ export default function DashboardPage() {
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", color:C.blue, fontSize:10 }}>{r.spo}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", fontSize:10 }} title={r.style}>{r.style}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.buyer}</td>
+                              <td style={{ background:"#f3e5f5", padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10, fontWeight:500, color:"#6a1b9a" }}>{r.grouping_buyer}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.dest_country}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment ? Number(r.qty_shipment).toLocaleString("en-US") : ""}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.shipped ? Number(r.shipped).toLocaleString("en-US") : ""}</td>
                               <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_dst)}</td>
-                              <td style={{ background:"#e1bee7", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_glove)}</td>
+                              <td style={{ background:"#bbdefb", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{fmtN(r.kk_glove)}</td>
+                              {spacerTd}
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"right",  whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.qty_shipment2 ? Number(r.qty_shipment2).toLocaleString("en-US") : ""}</td>
                               <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_env)}</td>
                               <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{fmtN(r.kk_inner)}</td>
                               <td style={{ background:"#ffcdd2", padding:"5px 7px", textAlign:"right", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{fmtN(r.kk_carton)}</td>
+                              {spacerTd}
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.line}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", fontSize:10 }}>{r.factory}</td>
                             </tr>
                           )
                         })}

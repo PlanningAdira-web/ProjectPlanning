@@ -12,6 +12,7 @@ export type ShipmentRow = {
   spo         : string
   style       : string
   buyer       : string
+  grouping_buyer: string
   dest_country: string
   qty_shipment: number
   shipped     : number
@@ -21,6 +22,8 @@ export type ShipmentRow = {
   kk_env      : number
   kk_inner    : number
   kk_carton   : number
+  line        : string
+  factory     : string
 }
 
 export type ShipmentData = {
@@ -71,9 +74,10 @@ async function fetchShipmentSet(): Promise<ShipmentData> {
   const header = raw[2].map(function(h: any) { return String(h ?? "").trim().toLowerCase() })
 
   // Deteksi index kolom berdasar header baris 3
-  // Kolom: Export, Week, SPO, Style, Buyer, Dest. Country,
-  //        Qty Shipment/pcs, Shipped, KK DST, KK Glove,
-  //        Qty Shipment/Date, Kekurangan Env/pcs, Kekurangan Inner/pcs, Kekurangan Carton/pcs
+  // Kolom (struktur baru): Export, Week, SPO, Style, Buyer, Grouping Buyer, Dest. Country,
+  //        Qty Shipment Glove/pcs, Shipped, KK DST, KK Glove, (kolom pemisah kosong),
+  //        Qty Shipment Packing/Date, Kekurangan Env/pcs, Kekurangan Inner/pcs, Kekurangan Carton/pcs,
+  //        (kolom pemisah kosong), Line, Factory
   function findCol(keywords: string[]): number {
     for (const kw of keywords) {
       const i = header.findIndex(function(h: string) { return h.includes(kw.toLowerCase()) })
@@ -86,40 +90,47 @@ async function fetchShipmentSet(): Promise<ShipmentData> {
   const iWeek    = findCol(["week"])
   const iSPO     = findCol(["spo"])
   const iStyle   = findCol(["style"])
-  const iBuyer   = findCol(["buyer"])
+  const iBuyer   = header.findIndex(function(h: string) { return h === "buyer" || (h.includes("buyer") && !h.includes("grouping")) })
+  const iGroupBuyer = findCol(["grouping buyer","grouping"])
   const iDest    = findCol(["dest"])
   const iQtyS1   = header.findIndex(function(h: string, i: number) {
-    return h.includes("qty") && h.includes("shipment") && i < 10
+    return h.includes("qty") && h.includes("shipment") && i < 12
   })
   const iShipped = findCol(["shipped"])
   const iKKDST   = findCol(["kk dst","kk_dst"])
   const iKKGlove = findCol(["kk glove","kk_glove"])
   const iQtyS2   = header.findIndex(function(h: string, i: number) {
-    return h.includes("qty") && h.includes("shipment") && i >= 10
+    return h.includes("qty") && h.includes("shipment") && i >= 12
   })
   const iKKEnv   = findCol(["kekurangan env","env / pcs","env/pcs"])
   const iKKInner = findCol(["kekurangan inner","inner / pcs","inner/pcs"])
   const iKKCarton= findCol(["kekurangan carton","carton / pcs","carton/pcs"])
+  const iLine    = header.findIndex(function(h: string) { return h === "line" })
+  const iFactory = header.findIndex(function(h: string) { return h === "factory" })
 
-  // Fallback ke posisi berdasar screenshot jika deteksi gagal
-  // A=0 Export, B=1 Week, C=2 SPO, D=3 Style, E=4 Buyer, F=5 Dest.Country
-  // G=6 Qty Shipment, H=7 Shipped, I=8 KK DST, J=9 KK Glove
-  // K=10 Qty Shipment/Date, L=11 Kekurangan Env, M=12 Kekurangan Inner, N=13 Kekurangan Carton
+  // Fallback ke posisi berdasar struktur sheet terbaru kalau deteksi header gagal
+  // A=0 Export, B=1 Week, C=2 SPO, D=3 Style, E=4 Buyer, F=5 Grouping Buyer, G=6 Dest.Country
+  // H=7 Qty Shipment Glove, I=8 Shipped, J=9 KK DST, K=10 KK Glove, L=11 (pemisah, dilewati)
+  // M=12 Qty Shipment Packing/Date, N=13 Kekurangan Env, O=14 Kekurangan Inner, P=15 Kekurangan Carton
+  // Q=16 (pemisah, dilewati), R=17 Line, S=18 Factory
   const ci = {
-    export  : iExport   >= 0 ? iExport   : 0,
-    week    : iWeek     >= 0 ? iWeek     : 1,
-    spo     : iSPO      >= 0 ? iSPO      : 2,
-    style   : iStyle    >= 0 ? iStyle    : 3,
-    buyer   : iBuyer    >= 0 ? iBuyer    : 4,
-    dest    : iDest     >= 0 ? iDest     : 5,
-    qty1    : iQtyS1    >= 0 ? iQtyS1    : 6,
-    shipped : iShipped  >= 0 ? iShipped  : 7,
-    kk_dst  : iKKDST    >= 0 ? iKKDST    : 8,
-    kk_glove: iKKGlove  >= 0 ? iKKGlove  : 9,
-    qty2    : iQtyS2    >= 0 ? iQtyS2    : 10,
-    kk_env  : iKKEnv    >= 0 ? iKKEnv    : 11,
-    kk_inner: iKKInner  >= 0 ? iKKInner  : 12,
-    kk_carton:iKKCarton >= 0 ? iKKCarton : 13,
+    export  : iExport     >= 0 ? iExport     : 0,
+    week    : iWeek       >= 0 ? iWeek       : 1,
+    spo     : iSPO        >= 0 ? iSPO        : 2,
+    style   : iStyle      >= 0 ? iStyle      : 3,
+    buyer   : iBuyer      >= 0 ? iBuyer      : 4,
+    groupBuyer: iGroupBuyer >= 0 ? iGroupBuyer : 5,
+    dest    : iDest       >= 0 ? iDest       : 6,
+    qty1    : iQtyS1      >= 0 ? iQtyS1      : 7,
+    shipped : iShipped    >= 0 ? iShipped    : 8,
+    kk_dst  : iKKDST      >= 0 ? iKKDST      : 9,
+    kk_glove: iKKGlove    >= 0 ? iKKGlove    : 10,
+    qty2    : iQtyS2      >= 0 ? iQtyS2      : 12,
+    kk_env  : iKKEnv      >= 0 ? iKKEnv      : 13,
+    kk_inner: iKKInner    >= 0 ? iKKInner    : 14,
+    kk_carton:iKKCarton   >= 0 ? iKKCarton   : 15,
+    line    : iLine       >= 0 ? iLine       : 17,
+    factory : iFactory    >= 0 ? iFactory    : 18,
   }
 
   const rows: ShipmentRow[] = []
@@ -146,6 +157,7 @@ async function fetchShipmentSet(): Promise<ShipmentData> {
       spo,
       style,
       buyer,
+      grouping_buyer: String(row[ci.groupBuyer] ?? "").trim(),
       dest_country : String(row[ci.dest]    ?? "").trim(),
       qty_shipment : parseNum(row[ci.qty1]),
       shipped      : parseNum(row[ci.shipped]),
@@ -155,6 +167,8 @@ async function fetchShipmentSet(): Promise<ShipmentData> {
       kk_env       : parseNum(row[ci.kk_env]),
       kk_inner     : parseNum(row[ci.kk_inner]),
       kk_carton    : parseNum(row[ci.kk_carton]),
+      line         : String(row[ci.line]    ?? "").trim(),
+      factory      : String(row[ci.factory] ?? "").trim(),
     })
   }
 
