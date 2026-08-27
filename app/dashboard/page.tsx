@@ -1899,26 +1899,26 @@ export default function DashboardPage() {
                 Shipment Set
               </span>
               <div style={{ display:"flex", alignItems:"center", gap:8, position:"relative" }}>
-                {/* Dropdown Buyer */}
-                <span style={{ fontSize:10, color:C.tx3 }}>Buyer:</span>
+                {/* Dropdown Grouping Buyer */}
+                <span style={{ fontSize:10, color:C.tx3 }}>Grouping Buyer:</span>
                 <div style={{ position:"relative" }}>
                   <button onClick={function() { setShipmentBuyerOpen(function(v: boolean) { return !v }); setShipmentWeekOpen(false) }}
                     style={{ fontSize:10, padding:"3px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.txt, cursor:"pointer", minWidth:180, textAlign:"left", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                     <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:160 }}>
-                      {shipmentBuyers.length === 0 ? "Semua Buyer" : shipmentBuyers.length + " buyer dipilih"}
+                      {shipmentBuyers.length === 0 ? "Semua Grouping Buyer" : shipmentBuyers.length + " grouping buyer dipilih"}
                     </span>
                     <span style={{ fontSize:9, color:C.tx3 }}>{shipmentBuyerOpen ? "^" : "v"}</span>
                   </button>
                   {shipmentBuyerOpen && (
                     <div style={{ position:"absolute", top:"100%", left:0, zIndex:100, background:"#fff", border:"0.5px solid #c8e6c9", borderRadius:8, boxShadow:"0 4px 16px rgba(0,0,0,.12)", minWidth:220, maxHeight:260, overflowY:"auto", marginTop:2 }}>
                       <div style={{ padding:"6px 10px", borderBottom:"0.5px solid #c8e6c9", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <span style={{ fontSize:9, fontWeight:500, color:C.tx3 }}>PILIH BUYER</span>
+                        <span style={{ fontSize:9, fontWeight:500, color:C.tx3 }}>PILIH GROUPING BUYER</span>
                         <button onClick={function() { setShipmentBuyers([]) }}
                           style={{ fontSize:9, color:C.org, background:"none", border:"none", cursor:"pointer", padding:0 }}>
                           Reset
                         </button>
                       </div>
-                      {(shipmentData?.buyers ?? []).map(function(b: string) {
+                      {(shipmentData?.grouping_buyers ?? []).map(function(b: string) {
                         const checked = shipmentBuyers.includes(b)
                         return (
                           <label key={b} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.txt, background: checked ? "#f1f8f2" : "transparent" }}
@@ -1987,7 +1987,7 @@ export default function DashboardPage() {
             <DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo}/>
 
             <SearchBox value={shipmentSearch} onChange={setShipmentSearch} placeholder="Cari SPO, style, line, atau buyer..." resultCount={shipmentData ? (shipmentData.rows ?? []).filter(function(r: any) {
-              if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
+              if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.grouping_buyer)) return false
               if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
               if (!inDateRange(r.export_date, dateFrom, dateTo)) return false
               return matchSearch(r, shipmentSearch)
@@ -2020,7 +2020,7 @@ export default function DashboardPage() {
               })
 
               const filtered = shipmentData.rows.filter(function(r: any) {
-                if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.buyer)) return false
+                if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.grouping_buyer)) return false
                 if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
                 if (!matchSearch(r, shipmentSearch)) return false
                 if (!inDateRange(r.export_date, dateFrom, dateTo)) return false

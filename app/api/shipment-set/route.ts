@@ -30,6 +30,7 @@ export type ShipmentData = {
   update_info  : string
   rows         : ShipmentRow[]
   buyers       : string[]
+  grouping_buyers: string[]
   weeks        : number[]
   fetched_at   : string
   fetched_epoch: number
@@ -173,12 +174,13 @@ async function fetchShipmentSet(): Promise<ShipmentData> {
   }
 
   const buyers = [...new Set(rows.map(function(r) { return r.buyer }))].sort()
+  const grouping_buyers = [...new Set(rows.map(function(r) { return r.grouping_buyer }).filter(Boolean))].sort()
   const weeks  = [...new Set(rows.map(function(r) { return r.week  }))].sort(function(a,b){return a-b})
 
   const now    = Date.now()
   const wibStr = new Date(now + 7 * 60 * 60 * 1000).toLocaleString("id-ID", { timeZone:"UTC" })
 
-  return { update_info, rows, buyers, weeks, fetched_at:wibStr, fetched_epoch:now }
+  return { update_info, rows, buyers, grouping_buyers, weeks, fetched_at:wibStr, fetched_epoch:now }
 }
 
 export async function GET(req: NextRequest) {
