@@ -160,6 +160,16 @@ function businessDaysDiff(from: Date, to: Date): number {
   return count
 }
 
+// Nomor minggu (ISO 8601, minggu mulai Senin) untuk tanggal hari ini WIB - dipakai default filter Week Shipment
+function getCurrentISOWeek(): number {
+  const nowWIB = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  const d = new Date(Date.UTC(nowWIB.getFullYear(), nowWIB.getMonth(), nowWIB.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+}
+
 // Status SPO berdasarkan selisih HARI KERJA (H, Minggu tidak dihitung) ke tanggal export/shipment:
 // > H-7        -> Persiapan Shipment (masih banyak waktu)
 // H-7 s/d H-3  -> Waspada  (catatan: H-3 dimasukkan ke Waspada karena tidak disebutkan eksplisit,
@@ -1049,6 +1059,7 @@ export default function DashboardPage() {
   const [waResult,      setWaResult]      = useState<{ok:boolean;msg:string}|null>(null)
   const [shipmentBuyers, setShipmentBuyers] = useState<string[]>([])
   const [shipmentWeeks,  setShipmentWeeks]  = useState<number[]>([])
+  const shipmentDefaultWeekApplied = useRef(false)
   const [shipmentBuyerOpen, setShipmentBuyerOpen] = useState(false)
   const [shipmentWeekOpen,  setShipmentWeekOpen]  = useState(false)
   const [jobdescs,       setJobdescs]       = useState<any[]>([])
@@ -1200,7 +1211,20 @@ export default function DashboardPage() {
     setShipmentLoading(true)
     fetch("/api/shipment-set")
       .then(function(r) { return r.json() })
-      .then(function(d) { if (d.ok) setShipmentData(d.data) })
+      .then(function(d) {
+        if (d.ok) {
+          setShipmentData(d.data)
+          // Default filter: minggu berjalan saat ini (bukan Semua Week), kalau minggu itu memang ada datanya.
+          // Cuma diterapkan sekali di load pertama - klik Refresh setelahnya tidak akan menimpa pilihan Week manual user.
+          if (!shipmentDefaultWeekApplied.current) {
+            shipmentDefaultWeekApplied.current = true
+            const curWeek: number = getCurrentISOWeek()
+            if ((d.data.weeks ?? []).includes(curWeek)) {
+              setShipmentWeeks([curWeek])
+            }
+          }
+        }
+      })
       .catch(function() {})
       .finally(function() { setShipmentLoading(false) })
   }, [page, shipmentData])
