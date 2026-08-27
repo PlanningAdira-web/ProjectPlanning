@@ -68,6 +68,30 @@ function matchSearch(row: any, q: string) {
   return haystack.indexOf(needle) !== -1
 }
 
+// Pecah string "UPDATE X (tgl, jam) | UPDATE Y (tgl, jam) | ..." jadi daftar badge {label, time}
+function parseUpdateInfo(raw: string): { label: string; time: string }[] {
+  if (!raw) return []
+  return raw.split("|").map(function(part) {
+    const trimmed = part.trim()
+    const m = trimmed.match(/^(.*?)\s*\(([^)]*)\)\s*$/)
+    if (m) {
+      let label = m[1].trim().replace(/^update\s+/i, "")
+      label = label.replace(/\w\S*/g, function(t) { return t.charAt(0).toUpperCase() + t.substr(1).toLowerCase() })
+      return { label, time: m[2].trim() }
+    }
+    return { label: trimmed, time: "" }
+  }).filter(function(x) { return x.label })
+}
+
+const UPDATE_BADGE_COLORS = [
+  { bg:"#e3f2fd", tx:"#0d47a1" },
+  { bg:"#e8f5e9", tx:"#1a5c2a" },
+  { bg:"#fff3e0", tx:"#c1560c" },
+  { bg:"#f3e5f5", tx:"#6a1b9a" },
+  { bg:"#e0f7fa", tx:"#00695c" },
+  { bg:"#fce4ec", tx:"#ad1457" },
+]
+
 function ageLabel(isoOrLocale: string): string {
   if (!isoOrLocale) return ""
   try {
@@ -1853,15 +1877,26 @@ export default function DashboardPage() {
         {/* == SHIPMENT SET == */}
         {page==="shipment" && (
           <div>
+            {shipmentData?.update_info && (
+              <div style={{ display:"flex", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:8 }}>
+                <span style={{ fontSize:10, fontWeight:500, color:C.tx3 }}>Update Shipment Set:</span>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {parseUpdateInfo(shipmentData.update_info).map(function(item, i) {
+                    const c = UPDATE_BADGE_COLORS[i % UPDATE_BADGE_COLORS.length]
+                    return (
+                      <span key={i} style={{ fontSize:10, padding:"3px 9px", borderRadius:999, background:c.bg, color:c.tx, fontWeight:500, whiteSpace:"nowrap" }}>
+                        {item.label}{item.time ? " \u2022 " + item.time : ""}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Toolbar */}
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
               <span style={{ fontSize:10, fontWeight:500, color:C.tx3, letterSpacing:".05em", textTransform:"uppercase", flex:1 }}>
                 Shipment Set
-                {shipmentData?.update_info && (
-                  <span style={{ fontWeight:400, marginLeft:8, color:C.org, fontSize:10 }}>
-                    {shipmentData.update_info}
-                  </span>
-                )}
               </span>
               <div style={{ display:"flex", alignItems:"center", gap:8, position:"relative" }}>
                 {/* Dropdown Buyer */}
