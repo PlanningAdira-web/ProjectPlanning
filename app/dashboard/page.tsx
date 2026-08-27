@@ -2008,7 +2008,11 @@ export default function DashboardPage() {
                 const hTotalQty      = hFiltered.reduce(function(a: number, r: any) { return a + r.qty_shipment }, 0)
                 const hTotalShipped  = hFiltered.reduce(function(a: number, r: any) { return a + r.shipped }, 0)
                 const hTotalKKGlove  = hFiltered.reduce(function(a: number, r: any) { return a + r.kk_glove }, 0)
-                const hTotalKKPack   = hFiltered.reduce(function(a: number, r: any) { return a + r.kk_env + r.kk_inner + r.kk_carton }, 0)
+                // Env, Inner, Carton adalah 1 kesatuan set packing (nilainya identik per baris),
+                // jadi kekurangan set diambil cukup dari salah satu kolom (Env) - bukan dijumlah ketiganya
+                // Ambil kekurangan yang PALING BESAR (nilai paling minus) di antara Env/Inner/Carton per baris -
+                // karena komponen yang jadi bottleneck bisa beda-beda tiap SPO, tidak selalu Env
+                const hTotalKKPack   = hFiltered.reduce(function(a: number, r: any) { return a + Math.min(r.kk_env, r.kk_inner, r.kk_carton) }, 0)
 
                 const hFmt = function(v: number) {
                   const abs = Math.abs(v).toLocaleString("en-US")
@@ -2020,7 +2024,7 @@ export default function DashboardPage() {
                   { label:"Qty Shipment",         value:hFmt(hTotalQty),     neg:hTotalQty < 0 },
                   { label:"Shipped",              value:hFmt(hTotalShipped), neg:hTotalShipped < 0 },
                   { label:"Kekurangan Glove",     value:hFmt(hTotalKKGlove), neg:hTotalKKGlove < 0 },
-                  { label:"Kekurangan Packing",   value:hFmt(hTotalKKPack),  neg:hTotalKKPack < 0 },
+                  { label:"Kekurangan Set Packing", value:hFmt(hTotalKKPack),  neg:hTotalKKPack < 0 },
                 ]
 
                 return (
