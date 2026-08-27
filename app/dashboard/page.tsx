@@ -1984,14 +1984,59 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo}/>
+            <div style={{ display:"flex", gap:16, alignItems:"flex-start", flexWrap:"wrap" }}>
+              <div style={{ flex:"1 1 320px", minWidth:280 }}>
+                <DateRangeFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo}/>
 
-            <SearchBox value={shipmentSearch} onChange={setShipmentSearch} placeholder="Cari SPO, style, line, atau buyer..." resultCount={shipmentData ? (shipmentData.rows ?? []).filter(function(r: any) {
-              if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.grouping_buyer)) return false
-              if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
-              if (!inDateRange(r.export_date, dateFrom, dateTo)) return false
-              return matchSearch(r, shipmentSearch)
-            }).length : undefined}/>
+                <SearchBox value={shipmentSearch} onChange={setShipmentSearch} placeholder="Cari SPO, style, line, atau buyer..." resultCount={shipmentData ? (shipmentData.rows ?? []).filter(function(r: any) {
+                  if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.grouping_buyer)) return false
+                  if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
+                  if (!inDateRange(r.export_date, dateFrom, dateTo)) return false
+                  return matchSearch(r, shipmentSearch)
+                }).length : undefined}/>
+              </div>
+
+              {shipmentData && (function() {
+                const hFiltered = shipmentData.rows.filter(function(r: any) {
+                  if (shipmentBuyers.length > 0 && !shipmentBuyers.includes(r.grouping_buyer)) return false
+                  if (shipmentWeeks.length  > 0 && !shipmentWeeks.includes(r.week))   return false
+                  if (!matchSearch(r, shipmentSearch)) return false
+                  if (!inDateRange(r.export_date, dateFrom, dateTo)) return false
+                  return true
+                })
+                const hTotalSPO      = new Set(hFiltered.map(function(r: any) { return r.spo })).size
+                const hTotalQty      = hFiltered.reduce(function(a: number, r: any) { return a + r.qty_shipment }, 0)
+                const hTotalShipped  = hFiltered.reduce(function(a: number, r: any) { return a + r.shipped }, 0)
+                const hTotalKKGlove  = hFiltered.reduce(function(a: number, r: any) { return a + r.kk_glove }, 0)
+                const hTotalKKPack   = hFiltered.reduce(function(a: number, r: any) { return a + r.kk_env + r.kk_inner + r.kk_carton }, 0)
+
+                const hFmt = function(v: number) {
+                  const abs = Math.abs(v).toLocaleString("en-US")
+                  return v < 0 ? "(" + abs + ")" : abs
+                }
+
+                const cards = [
+                  { label:"Total SPO",           value:hTotalSPO.toLocaleString("en-US"), neg:false },
+                  { label:"Qty Shipment",         value:hFmt(hTotalQty),     neg:hTotalQty < 0 },
+                  { label:"Shipped",              value:hFmt(hTotalShipped), neg:hTotalShipped < 0 },
+                  { label:"Kekurangan Glove",     value:hFmt(hTotalKKGlove), neg:hTotalKKGlove < 0 },
+                  { label:"Kekurangan Packing",   value:hFmt(hTotalKKPack),  neg:hTotalKKPack < 0 },
+                ]
+
+                return (
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"flex-end", flex:"1 1 360px" }}>
+                    {cards.map(function(c, i) {
+                      return (
+                        <div key={i} style={{ background:"#fff", border:"0.5px solid " + (c.neg ? "#ef9a9a" : "#c8e6c9"), borderRadius:8, padding:"8px 12px", minWidth:100, textAlign:"right" }}>
+                          <div style={{ fontSize:9, color:C.tx3, textTransform:"uppercase" }}>{c.label}</div>
+                          <div style={{ fontSize:16, fontWeight:600, color: c.neg ? C.red : C.txt, marginTop:2 }}>{c.value}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
 
             {shipmentLoading && (
               <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
