@@ -111,9 +111,11 @@ function parseHeaderDate(d: string): Date | null {
   if (!d) return null
   const parts = d.trim().split("-")
   if (parts.length < 3) return null
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const monthsEN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  const monthsID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"]
   const day  = parseInt(parts[0], 10)
-  const mIdx = months.indexOf(parts[1])
+  let mIdx = monthsEN.findIndex(function(m) { return m.toLowerCase() === parts[1].toLowerCase() })
+  if (mIdx < 0) mIdx = monthsID.findIndex(function(m) { return m.toLowerCase() === parts[1].toLowerCase() })
   let   yr   = parseInt(parts[2], 10)
   if (isNaN(day) || mIdx < 0 || isNaN(yr)) return null
   if (yr < 100) yr += 2000
@@ -133,6 +135,48 @@ function inDateRange(d: string, fromISO: string, toISO: string) {
     if (dt > t) return false
   }
   return true
+}
+
+type ShipmentStatus = { label: string; fill: string; stroke: string }
+
+const SHIPMENT_STATUS_LEGEND: ShipmentStatus[] = [
+  { label:"Persiapan Shipment", fill:"#cbe3c8", stroke:"#00bf63" },
+  { label:"Waspada",            fill:"#00bf63", stroke:"#1e5e2d" },
+  { label:"Kritis",             fill:"#ff914d", stroke:"#ff751f" },
+  { label:"Terlambat",          fill:"#ff3131", stroke:"#000000" },
+]
+
+// Selisih HARI KERJA antara 2 tanggal (hari Minggu tidak dihitung sebagai hari).
+// Jalan mundur/maju hari demi hari dari `from` ke `to`, cuma nambah/kurang counter kalau bukan hari Minggu.
+function businessDaysDiff(from: Date, to: Date): number {
+  if (to.getTime() === from.getTime()) return 0
+  const forward = to.getTime() > from.getTime()
+  let count = 0
+  let cur = new Date(from)
+  while (cur.getTime() !== to.getTime()) {
+    cur = new Date(cur.getTime() + (forward ? 1 : -1) * 86400000)
+    if (cur.getDay() !== 0) count += forward ? 1 : -1 // getDay()===0 -> Minggu, dilewati
+  }
+  return count
+}
+
+// Status SPO berdasarkan selisih HARI KERJA (H, Minggu tidak dihitung) ke tanggal export/shipment:
+// > H-7        -> Persiapan Shipment (masih banyak waktu)
+// H-7 s/d H-3  -> Waspada  (catatan: H-3 dimasukkan ke Waspada karena tidak disebutkan eksplisit,
+//                 supaya rentang Waspada H-7~H-4 dan Kritis H-2~H-1 tidak tumpang tindih/bolong)
+// H-2 s/d H-1  -> Kritis
+// H0 / lewat   -> Terlambat
+function shipmentStatus(exportDateStr: string): ShipmentStatus | null {
+  const dt = parseHeaderDate(exportDateStr)
+  if (!dt) return null
+  const nowWIB  = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  const todayMid = new Date(nowWIB.getFullYear(), nowWIB.getMonth(), nowWIB.getDate())
+  const diffDays = businessDaysDiff(todayMid, dt)
+
+  if (diffDays > 7) return SHIPMENT_STATUS_LEGEND[0]
+  if (diffDays >= 3) return SHIPMENT_STATUS_LEGEND[1]
+  if (diffDays >= 1) return SHIPMENT_STATUS_LEGEND[2]
+  return SHIPMENT_STATUS_LEGEND[3]
 }
 
 function DateRangeFilter(props: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
@@ -2088,6 +2132,17 @@ export default function DashboardPage() {
 
               return (
                 <div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", marginBottom:8, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
+                    <span style={{ fontSize:9, fontWeight:600, color:C.tx3, textTransform:"uppercase" }}>Status SPO:</span>
+                    {SHIPMENT_STATUS_LEGEND.map(function(st) {
+                      return (
+                        <span key={st.label} style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:C.tx2 }}>
+                          <span style={{ width:10, height:10, borderRadius:"50%", background:st.fill, border:"1.5px solid "+st.stroke }}/>
+                          {st.label}
+                        </span>
+                      )
+                    })}
+                  </div>
                   {filtered.length === 0 ? (
                     <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
                       Tidak ada baris yang cocok dengan filter/pencarian saat ini.
@@ -2143,11 +2198,17 @@ export default function DashboardPage() {
                           const prev = i > 0 ? filtered[i-1] : null
                           const weekSep = prev && prev.week !== r.week
                           const spacerTd = <td style={{ background:"#f4f7f3", borderLeft:"1px dashed #c8c4b8", borderRight:"1px dashed #c8c4b8", borderBottom:"0.5px solid #cfe0cc" }}></td>
+                          const st = shipmentStatus(r.export_date)
                           return (
                             <tr key={i} style={{ borderTop: weekSep ? "2px solid #a5d6a7" : "none" }}>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.export_date}</td>
                               <td style={{ background:wc.hl, padding:"5px 7px", textAlign:"center", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontWeight:500, color:C.gdark, fontSize:10 }}>W{r.week}</td>
-                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", color:C.blue, fontSize:10 }}>{r.spo}</td>
+                              <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", color:C.blue, fontSize:10 }}>
+                                <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+                                  {r.spo}
+                                  {st && <span title={st.label} style={{ width:9, height:9, borderRadius:"50%", background:st.fill, border:"1.5px solid "+st.stroke, flexShrink:0 }}/>}
+                                </span>
+                              </td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", maxWidth:190, overflow:"hidden", textOverflow:"ellipsis", fontSize:10 }} title={r.style}>{r.style}</td>
                               <td style={{ background:wc.bg, padding:"5px 7px", textAlign:"left",   whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10 }}>{r.buyer}</td>
                               <td style={{ background:"#f3e5f5", padding:"5px 7px", textAlign:"left", whiteSpace:"nowrap", borderBottom:"0.5px solid #cfe0cc", borderRight:"0.5px solid rgba(180,220,180,.2)", fontSize:10, fontWeight:500, color:"#6a1b9a" }}>{r.grouping_buyer}</td>
