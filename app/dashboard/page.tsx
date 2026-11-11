@@ -1481,6 +1481,7 @@ function CategoryFilterBar(props: CatFilterProps) {
 type FCProps = {
   loading: boolean
   data: any
+  error?: string
   search: string
   weekFrom: string
   weekTo: string
@@ -1499,7 +1500,7 @@ const FC_ROW_H = [22, 96, 22]
 const FC_LABELS = ["JK", "Buyer", "Qty Plan"]
 
 function KalenderFCTable(props: FCProps) {
-  const { loading, data, search, weekFrom, weekTo, filterCat, filterFactory, filterLine, filterBuyer } = props
+  const { loading, data, error, search, weekFrom, weekTo, filterCat, filterFactory, filterLine, filterBuyer } = props
   const [dlScope,   setDlScope]   = useState<"kalender"|"rekap"|"both">("both")
   const [dlBusy,    setDlBusy]    = useState(false)
   const [xlBusy,    setXlBusy]    = useState(false)
@@ -1514,7 +1515,12 @@ function KalenderFCTable(props: FCProps) {
   )
   if (!data) return (
     <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
-      Gagal memuat data. Pastikan sheet Kalender FC tersedia.
+      Gagal memuat data dari sheet Kalender FC.
+      {error && (
+        <div style={{ marginTop:10, padding:"8px 12px", background:"#fff", border:"0.5px solid #ffcc80", borderRadius:6, fontSize:11, color:C.txt, fontFamily:"ui-monospace, Menlo, Consolas, monospace", textAlign:"left", wordBreak:"break-word" }}>
+          Penyebab: {error}
+        </div>
+      )}
     </div>
   )
 
@@ -1881,6 +1887,7 @@ export default function DashboardPage() {
   const [kalenderSearch, setKalenderSearch] = useState("")
   const [fcData,    setFcData]    = useState<any>(null)
   const [fcLoading, setFcLoading] = useState(false)
+  const [fcError,   setFcError]   = useState("")
   const [fcFilterCat,     setFcFilterCat]     = useState<"factory"|"line"|"buyer">("factory")
   const [fcFilterFactory, setFcFilterFactory] = useState<string[]>([])
   const [fcFilterLine,    setFcFilterLine]    = useState<string[]>([])
@@ -2099,10 +2106,23 @@ export default function DashboardPage() {
     if (page !== "kalenderfc") return
     if (fcData) return
     setFcLoading(true)
+    setFcError("")
     fetch("/api/kalender-fc")
-      .then(function(r) { return r.json() })
-      .then(function(d) { if (d.ok) setFcData(d.data) })
-      .catch(function() {})
+      .then(function(r) {
+        return r.text().then(function(text) {
+          try { return JSON.parse(text) }
+          catch (e) {
+            throw new Error(r.status === 404
+              ? "HTTP 404: alamat /api/kalender-fc tidak ditemukan. Pastikan file app/api/kalender-fc/route.ts sudah ada di repo dan ter-deploy."
+              : "Server membalas HTTP " + r.status + " dengan isi yang bukan JSON.")
+          }
+        })
+      })
+      .then(function(d) {
+        if (d.ok) { setFcData(d.data); setFcError("") }
+        else setFcError(d.error || "Respons tidak valid dari server.")
+      })
+      .catch(function(e) { setFcError((e && e.message) || "Gagal terhubung ke server.") })
       .finally(function() { setFcLoading(false) })
   }, [page, fcData])
 
@@ -2857,7 +2877,7 @@ export default function DashboardPage() {
             )}
 
             <KalenderFCTable
-              loading={fcLoading} data={fcData}
+              loading={fcLoading} data={fcData} error={fcError}
               search={fcSearch} weekFrom={fcWeekFrom} weekTo={fcWeekTo}
               filterCat={fcFilterCat} filterFactory={fcFilterFactory} filterLine={fcFilterLine} filterBuyer={fcFilterBuyer}
             />
