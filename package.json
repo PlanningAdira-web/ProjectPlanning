@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
+    "exceljs": "^4.4.0",
     "googleapis": "^140.0.0",
     "html2canvas": "^1.4.1",
     "jose": "^5.9.6",

@@ -6,7 +6,7 @@ import Image from "next/image"
 type Role  = "admin"|"planning"|"viewer"
 type User  = { username:string; name:string; role:Role }
 type Perms = { canRefreshAI:boolean; canChat:boolean; canBalancing:boolean; canToggleAI:boolean; canTodo:boolean }
-type Page  = "todo"|"vis"|"plandst"|"plansew"|"kalender"|"shipment"|"matset"|"sim"|"ai"
+type Page  = "todo"|"vis"|"plandst"|"plansew"|"kalender"|"kalenderfc"|"shipment"|"matset"|"sim"|"ai"
 type Msg   = { role:"user"|"assistant"; content:string }
 type Todo  = { id:string; text:string; priority:"urgent"|"normal"; source:"ai"|"manual"; done:boolean; done_by:string|null }
 
@@ -658,6 +658,295 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out
 }
 
+// =====================================================================
+// EXPORT EXCEL (exceljs) - 2 sheet: matriks tampilan + tabel datar. Mengikuti filter yang sedang aktif.
+// =====================================================================
+function xlArgb(hex: string): string { return "FF" + hex.replace("#", "").toUpperCase() }
+
+const XL_THIN   = { style:"thin" as const,   color:{ argb:"FFC8D6C4" } }
+const XL_MEDIUM = { style:"medium" as const, color:{ argb:"FF1F3D2A" } }
+const XL_HEAD_FILL = { type:"pattern" as const, pattern:"solid" as const, fgColor:{ argb:"FF1A5C2A" } }
+
+function xlFilterLabel(cat: string, vf: string[], vl: string[], vb: string[]): string {
+  const vals = cat === "factory" ? vf : cat === "line" ? vl : vb
+  if (!vals.length) return "semua"
+  const base = cat === "line" ? "line-" + vals.length + "pcs" : vals.join("-")
+  return base.toLowerCase().replace(/\s+/g, "").replace(/[\\/:*?"<>|]/g, "")
+}
+
+function xlFilterText(cat: string, vf: string[], vl: string[], vb: string[], weeks: string[], search: string): string {
+  const vals = cat === "factory" ? vf : cat === "line" ? vl : vb
+  const catName = cat === "factory" ? "Factory" : cat === "line" ? "Line" : "Buyer"
+  return "Filter by " + catName + ": " + (vals.length ? vals.join(", ") : "Semua")
+    + "  |  Minggu " + (weeks[0] ?? "-") + " s/d " + (weeks[weeks.length - 1] ?? "-") + " (" + weeks.length + " minggu)"
+    + (search ? "  |  Search: \"" + search + "\"" : "")
+}
+
+async function xlSave(wb: any, filename: string) {
+  const buf = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(function() { URL.revokeObjectURL(url) }, 3000)
+}
+
+function xlStyleHeaderRow(row: any, fromCol: number, toCol: number) {
+  for (let c = fromCol; c <= toCol; c++) {
+    const cell = row.getCell(c)
+    cell.fill = XL_HEAD_FILL
+    cell.font = { bold:true, color:{ argb:"FFFFFFFF" }, size:10 }
+    cell.alignment = { horizontal:"center", vertical:"middle", wrapText:true }
+  }
+}
+
+function xlNum(v: any): number | string {
+  const n = Number(v)
+  return isFinite(n) && String(v).trim() !== "" ? n : String(v)
+}
+
+// ---------- Kalender Planning Forecast ----------
+function fcBuildWorkbook(ExcelJS: any, a: {
+  items: { factory: string; line: string }[]
+  weeks: string[]
+  slotsOf: (it: { factory: string; line: string }, w: string) => any[]
+  filterText: string
+}) {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = "AI Plan+"
+  wb.created = new Date()
+
+  // --- Sheet 1: matriks seperti tampilan (1 Line = 3 baris JK/Buyer/Qty Plan, 1 minggu = 3 slot) ---
+  const ws = wb.addWorksheet("Matriks Forecast", { views:[{ state:"frozen", xSplit:3, ySplit:3 }] })
+  const nW = a.weeks.length
+  const lastCol = 3 + nW * 3
+  ws.getColumn(1).width = 11; ws.getColumn(2).width = 8; ws.getColumn(3).width = 10
+  for (let c = 4; c <= lastCol; c++) ws.getColumn(c).width = 8.5
+
+  ws.mergeCells(1, 1, 1, lastCol)
+  ws.getCell(1, 1).value = "PRODUCTION FORECAST CALENDAR - KALENDER PLANNING FORECAST"
+  ws.getCell(1, 1).fill = XL_HEAD_FILL
+  ws.getCell(1, 1).font = { bold:true, size:13, color:{ argb:"FFFFFFFF" } }
+  ws.getCell(1, 1).alignment = { vertical:"middle", horizontal:"left" }
+  ws.getRow(1).height = 24
+
+  ws.mergeCells(2, 1, 2, lastCol)
+  ws.getCell(2, 1).value = a.filterText
+  ws.getCell(2, 1).font = { italic:true, size:9, color:{ argb:"FF5C6B60" } }
+  ws.getRow(2).height = 16
+
+  ws.getCell(3, 1).value = "Fact"
+  ws.getCell(3, 2).value = "Line"
+  a.weeks.forEach(function(w, wi) {
+    const c0 = 4 + wi * 3
+    ws.mergeCells(3, c0, 3, c0 + 2)
+    ws.getCell(3, c0).value = "Minggu " + w
+  })
+  xlStyleHeaderRow(ws.getRow(3), 1, lastCol)
+  ws.getRow(3).height = 20
+
+  const labels = ["JK", "Buyer", "Qty Plan"]
+  a.items.forEach(function(it, ii) {
+    const r0 = 4 + ii * 3
+    ws.getRow(r0).height = 18; ws.getRow(r0 + 1).height = 84; ws.getRow(r0 + 2).height = 18
+
+    ws.mergeCells(r0, 2, r0 + 2, 2)
+    ws.getCell(r0, 2).value = it.line
+    ws.getCell(r0, 2).font = { bold:true, size:10 }
+    ws.getCell(r0, 2).alignment = { horizontal:"center", vertical:"middle" }
+
+    labels.forEach(function(lb, ri) {
+      const c = ws.getCell(r0 + ri, 3)
+      c.value = lb
+      c.font = { bold:true, size:9, color:{ argb:"FF5C6B60" } }
+      c.alignment = { horizontal:"left", vertical:"middle" }
+    })
+
+    a.weeks.forEach(function(w, wi) {
+      const slots = a.slotsOf(it, w)
+      for (let si = 0; si < 3; si++) {
+        const col = 4 + wi * 3 + si
+        const s = slots[si]
+        const jkC = ws.getCell(r0, col), byC = ws.getCell(r0 + 1, col), qtC = ws.getCell(r0 + 2, col)
+        jkC.alignment = { horizontal:"right", vertical:"middle" }
+        qtC.alignment = { horizontal:"right", vertical:"middle" }
+        if (!s) continue
+        jkC.value = Math.round((s.jk || 0) * 10) / 10
+        jkC.numFmt = "0.0"
+        if (s.buyer) {
+          const st = fcBuyerStyle(s.buyer)
+          byC.value = s.buyer
+          byC.fill = { type:"pattern", pattern:"solid", fgColor:{ argb:xlArgb(st.bg) } }
+          byC.font = { bold:true, size:9, color:{ argb:xlArgb(st.tx) } }
+          byC.alignment = { horizontal:"center", vertical:"middle", textRotation:90 }
+        }
+        qtC.value = Math.round(s.qty || 0)
+        qtC.numFmt = "#,##0"
+        qtC.font = { bold:true, size:10 }
+      }
+    })
+  })
+
+  // Factory digabung vertikal per kelompok Factory yang berurutan
+  let ii0 = 0
+  while (ii0 < a.items.length) {
+    let span = 0
+    while (ii0 + span < a.items.length && a.items[ii0 + span].factory === a.items[ii0].factory) span++
+    const rStart = 4 + ii0 * 3
+    ws.mergeCells(rStart, 1, rStart + span * 3 - 1, 1)
+    ws.getCell(rStart, 1).value = a.items[ii0].factory
+    ws.getCell(rStart, 1).font = { bold:true, size:10, color:{ argb:"FF1A5C2A" } }
+    ws.getCell(rStart, 1).alignment = { horizontal:"center", vertical:"middle" }
+    ii0 += span
+  }
+
+  // Border: tipis di semua sel, garis tebal di bawah baris Qty Plan (pemisah antar-Line)
+  const lastRow = 3 + a.items.length * 3
+  for (let r = 3; r <= lastRow; r++) {
+    for (let c = 1; c <= lastCol; c++) {
+      const cell = ws.getCell(r, c)
+      const isQty = r >= 4 && (r - 4) % 3 === 2
+      cell.border = { top:XL_THIN, left:XL_THIN, right:XL_THIN, bottom: isQty ? XL_MEDIUM : XL_THIN }
+    }
+  }
+
+  // --- Sheet 2: tabel datar, 1 baris per slot pekerjaan (siap difilter / pivot) ---
+  const ws2 = wb.addWorksheet("Data Forecast", { views:[{ state:"frozen", ySplit:1 }] })
+  ws2.columns = [
+    { header:"Factory",  key:"f",  width:12 }, { header:"Line", key:"l", width:9 }, { header:"Minggu", key:"w", width:9 },
+    { header:"Slot",     key:"s",  width:6  }, { header:"Buyer", key:"b", width:18 },
+    { header:"JK",       key:"jk", width:8  }, { header:"Qty Plan", key:"q", width:12 },
+  ]
+  a.items.forEach(function(it) {
+    a.weeks.forEach(function(w) {
+      a.slotsOf(it, w).forEach(function(s: any, si: number) {
+        if (!s) return
+        const row = ws2.addRow({ f:it.factory, l:it.line, w:xlNum(w), s:si + 1, b:s.buyer, jk:Math.round((s.jk || 0) * 10) / 10, q:Math.round(s.qty || 0) })
+        row.getCell("jk").numFmt = "0.0"
+        row.getCell("q").numFmt  = "#,##0"
+      })
+    })
+  })
+  xlStyleHeaderRow(ws2.getRow(1), 1, 7)
+  ws2.autoFilter = { from:{ row:1, column:1 }, to:{ row:1, column:7 } }
+  return wb
+}
+
+// ---------- Kalender Planning ----------
+function kpBuildWorkbook(ExcelJS: any, a: {
+  lines: string[]
+  weeks: string[]
+  cellOf: (w: string, l: string) => any | null
+  filterText: string
+  excludeLines: string[]
+}) {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = "AI Plan+"
+  wb.created = new Date()
+  const excl = new Set(a.excludeLines.map(function(l) { return l.toUpperCase() }))
+
+  // --- Sheet 1: matriks seperti tampilan (baris = Minggu, kolom = Line; tiap Minggu 6 baris keterangan) ---
+  const ws = wb.addWorksheet("Matriks Kalender", { views:[{ state:"frozen", xSplit:2, ySplit:3 }] })
+  const lastCol = 2 + a.lines.length
+  ws.getColumn(1).width = 11; ws.getColumn(2).width = 13
+  for (let c = 3; c <= lastCol; c++) ws.getColumn(c).width = 15
+
+  ws.mergeCells(1, 1, 1, Math.max(lastCol, 3))
+  ws.getCell(1, 1).value = "KALENDER PLANNING"
+  ws.getCell(1, 1).fill = XL_HEAD_FILL
+  ws.getCell(1, 1).font = { bold:true, size:13, color:{ argb:"FFFFFFFF" } }
+  ws.getCell(1, 1).alignment = { vertical:"middle", horizontal:"left" }
+  ws.getRow(1).height = 24
+
+  ws.mergeCells(2, 1, 2, Math.max(lastCol, 3))
+  ws.getCell(2, 1).value = a.filterText
+  ws.getCell(2, 1).font = { italic:true, size:9, color:{ argb:"FF5C6B60" } }
+
+  ws.getCell(3, 1).value = "Minggu"
+  ws.getCell(3, 2).value = "Keterangan"
+  a.lines.forEach(function(l, li) { ws.getCell(3, 3 + li).value = "Line " + l })
+  xlStyleHeaderRow(ws.getRow(3), 1, Math.max(lastCol, 3))
+  ws.getRow(3).height = 20
+
+  const labels = ["Factory", "JK Normal", "JK Lembur", "Buyer", "Qty (pcs)", "Total Qty"]
+  const NB = labels.length
+  const dashFmt = '0.0;-0.0;"-"'
+  a.weeks.forEach(function(w, wi) {
+    const r0 = 4 + wi * NB
+    ws.mergeCells(r0, 1, r0 + NB - 1, 1)
+    ws.getCell(r0, 1).value = "Minggu " + w
+    ws.getCell(r0, 1).font = { bold:true, size:10, color:{ argb:"FF1A5C2A" } }
+    ws.getCell(r0, 1).alignment = { horizontal:"center", vertical:"middle" }
+    labels.forEach(function(lb, k) {
+      const c = ws.getCell(r0 + k, 2)
+      c.value = lb
+      c.font = { bold:true, size:9, color:{ argb:"FF5C6B60" } }
+      ws.getRow(r0 + k).height = k === 3 ? 30 : 17
+    })
+    a.lines.forEach(function(l, li) {
+      const col = 3 + li
+      const cell = a.cellOf(w, l)
+      for (let k = 0; k < NB; k++) ws.getCell(r0 + k, col).alignment = { horizontal:"right", vertical:"middle", wrapText:true }
+      if (!cell) return
+      const bd = buyerBreakdown(cell)
+      ws.getCell(r0, col).value = cell._fact || ""
+      ws.getCell(r0, col).alignment = { horizontal:"center", vertical:"middle" }
+      ws.getCell(r0 + 1, col).value = Math.round((cell.jk_normal || 0) * 10) / 10
+      ws.getCell(r0 + 1, col).numFmt = dashFmt
+      ws.getCell(r0 + 2, col).value = Math.round((cell.jk_lembur || 0) * 10) / 10
+      ws.getCell(r0 + 2, col).numFmt = dashFmt
+      ws.getCell(r0 + 3, col).value = bd.uniqueBuyers.join(", ")
+      ws.getCell(r0 + 3, col).alignment = { horizontal:"center", vertical:"middle", wrapText:true }
+      ws.getCell(r0 + 4, col).value = bd.uniqueBuyers.map(function(b) { return bd.qtyMap[b] }).join(", ")
+      ws.getCell(r0 + 5, col).value = Math.round(bd.totalQty)
+      ws.getCell(r0 + 5, col).numFmt = "#,##0"
+      ws.getCell(r0 + 5, col).font = { bold:true, size:10 }
+    })
+  })
+  const lastRow = 3 + a.weeks.length * NB
+  for (let r = 3; r <= lastRow; r++) {
+    for (let c = 1; c <= Math.max(lastCol, 3); c++) {
+      const lastOfWeek = r >= 4 && (r - 4) % NB === NB - 1
+      ws.getCell(r, c).border = { top:XL_THIN, left:XL_THIN, right:XL_THIN, bottom: lastOfWeek ? XL_MEDIUM : XL_THIN }
+    }
+  }
+
+  // --- Sheet 2: tabel datar, 1 baris per Minggu x Line x Buyer. JK per Line dibagi proporsional Qty (sama dengan Rekap Buyer) ---
+  const ws2 = wb.addWorksheet("Data Datar", { views:[{ state:"frozen", ySplit:1 }] })
+  ws2.columns = [
+    { header:"Minggu",               key:"w",   width:9  }, { header:"Factory", key:"f", width:10 }, { header:"Line", key:"l", width:9 },
+    { header:"Buyer",                key:"b",   width:16 }, { header:"Qty (pcs)", key:"q", width:12 },
+    { header:"Porsi Qty (%)",        key:"p",   width:13 },
+    { header:"JK Normal Line",       key:"jn",  width:14 }, { header:"JK Lembur Line", key:"jl", width:14 },
+    { header:"JK Normal (porsi)",    key:"jnp", width:16 }, { header:"JK Lembur (porsi)", key:"jlp", width:16 },
+    { header:"Dihitung di Rekap",    key:"r",   width:16 },
+  ]
+  a.weeks.forEach(function(w) {
+    a.lines.forEach(function(l) {
+      const cell = a.cellOf(w, l)
+      if (!cell) return
+      const bd = buyerBreakdown(cell)
+      bd.uniqueBuyers.forEach(function(b) {
+        const share = bd.totalQty > 0 ? bd.qtyMap[b] / bd.totalQty : 1 / bd.uniqueBuyers.length
+        const row = ws2.addRow({
+          w:xlNum(w), f:cell._fact || "", l, b, q:Math.round(bd.qtyMap[b]), p:Math.round(share * 1000) / 10,
+          jn:Math.round((cell.jk_normal || 0) * 10) / 10, jl:Math.round((cell.jk_lembur || 0) * 10) / 10,
+          jnp:Math.round((cell.jk_normal || 0) * share * 10) / 10, jlp:Math.round((cell.jk_lembur || 0) * share * 10) / 10,
+          r: excl.has(l.toUpperCase()) ? "Tidak" : "Ya",
+        })
+        row.getCell("q").numFmt = "#,##0"
+        row.getCell("p").numFmt = "0.0"
+        ;["jn","jl","jnp","jlp"].forEach(function(k) { row.getCell(k).numFmt = "0.0" })
+      })
+    })
+  })
+  xlStyleHeaderRow(ws2.getRow(1), 1, 11)
+  ws2.autoFilter = { from:{ row:1, column:1 }, to:{ row:1, column:11 } }
+  return wb
+}
+
 type KalenderProps = {
   loading: boolean
   data: any
@@ -675,6 +964,7 @@ function KalenderTable(props: KalenderProps) {
   const { loading, data, search, setSearch, weekFrom, weekTo, filterCat, filterFactory, filterLine, filterBuyer } = props
   const [dlScope, setDlScope] = useState<"kalender"|"rekap"|"both">("both")
   const [dlBusy,  setDlBusy]  = useState(false)
+  const [xlBusy,  setXlBusy]  = useState(false)
   const chunkRefs = useRef<(HTMLDivElement | null)[]>([])
   const rekapOnlyRef = useRef<HTMLDivElement>(null)
 
@@ -944,6 +1234,28 @@ function KalenderTable(props: KalenderProps) {
     await new Promise(function(res) { setTimeout(res, 350) }) // beri jarak antar-download biar tidak diblokir browser
   }
 
+  // Download Excel: 2 sheet (matriks tampilan + tabel datar), mengikuti filter Minggu / Filter by / Search yang aktif
+  async function handleDownloadExcel() {
+    setXlBusy(true)
+    try {
+      const mod: any = await import("exceljs")
+      const ExcelJS = mod.default ?? mod
+      const wb = kpBuildWorkbook(ExcelJS, {
+        lines: searchedLines,
+        weeks,
+        cellOf: function(w: string, l: string) { return cellsForFactory[w]?.[l] ?? null },
+        filterText: xlFilterText(filterCat, filterFactory, filterLine, filterBuyer, weeks, search),
+        excludeLines: ["K12", "A27"],
+      })
+      const wk = weeks.length ? "_W" + weeks[0] + "-W" + weeks[weeks.length - 1] : ""
+      await xlSave(wb, "kalender-planning_" + xlFilterLabel(filterCat, filterFactory, filterLine, filterBuyer) + wk + ".xlsx")
+    } catch (e) {
+      alert("Gagal membuat file Excel. Coba lagi.")
+    } finally {
+      setXlBusy(false)
+    }
+  }
+
   async function handleDownloadJPG() {
     setDlBusy(true)
     try {
@@ -983,10 +1295,16 @@ function KalenderTable(props: KalenderProps) {
             )
           })}
         </div>
-        <button onClick={handleDownloadJPG} disabled={dlBusy}
-          style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", fontWeight:500, cursor:dlBusy?"not-allowed":"pointer" }}>
-          {dlBusy ? "Membuat JPG..." : "Download JPG"}
-        </button>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <button onClick={handleDownloadExcel} disabled={xlBusy}
+            style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"1px solid " + C.gdark, background:"#fff", color:C.gdark, fontWeight:500, cursor:xlBusy?"not-allowed":"pointer" }}>
+            {xlBusy ? "Membuat Excel..." : "Download Excel"}
+          </button>
+          <button onClick={handleDownloadJPG} disabled={dlBusy}
+            style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", fontWeight:500, cursor:dlBusy?"not-allowed":"pointer" }}>
+            {dlBusy ? "Membuat JPG..." : "Download JPG"}
+          </button>
+        </div>
       </div>
 
       <div style={{ fontSize:9, color:C.tx3, marginBottom:8 }}>
@@ -1057,6 +1375,481 @@ function KalenderTable(props: KalenderProps) {
   )
 }
 
+// =====================================================================
+// KALENDER PLANNING FORECAST (sheet "Kalender FC")
+// Satu Line = 1 blok 3 baris (JK / Buyer / Qty Plan), tiap minggu = 3 slot pekerjaan berdampingan
+// =====================================================================
+const FC_BUYER_STYLES: Record<string, { bg: string; tx: string }> = {
+  "callaway":        { bg:"#dce9f7", tx:"#1f4e79" },
+  "tmag":            { bg:"#d5ecd9", tx:"#1b5e20" },
+  "others":          { bg:"#fde9d0", tx:"#9a5b00" },
+  "tmag&others":     { bg:"#e6dcf2", tx:"#5e3a99" },
+  "callaway&others": { bg:"#f8dde6", tx:"#a3204f" },
+}
+const FC_BUYER_ORDER = ["callaway","tmag","others","tmag&others","callaway&others"]
+const FC_FALLBACK_STYLES = [
+  { bg:"#e0f2f1", tx:"#00695c" }, { bg:"#fff9c4", tx:"#8a6d00" },
+  { bg:"#ede7f6", tx:"#4527a0" }, { bg:"#ffebee", tx:"#b71c1c" },
+]
+
+// Warna per label buyer mengikuti Customer Color Key di sheet; label baru dapat warna cadangan yang konsisten per nama
+function fcBuyerStyle(label: string): { bg: string; tx: string } {
+  const k = label.trim().toLowerCase()
+  if (FC_BUYER_STYLES[k]) return FC_BUYER_STYLES[k]
+  let h = 0
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) % 1000
+  return FC_FALLBACK_STYLES[h % FC_FALLBACK_STYLES.length]
+}
+
+function fcSortBuyers(a: string, b: string): number {
+  const ia = FC_BUYER_ORDER.indexOf(a.toLowerCase()), ib = FC_BUYER_ORDER.indexOf(b.toLowerCase())
+  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b)
+}
+
+// JK: selalu 1 angka di belakang koma (33,0 / 49,5 / 1.945,0). Qty Plan: bilangan bulat dengan pemisah ribuan titik (3.744)
+function fmtJK(n: number): string {
+  return (Math.round((n || 0) * 10) / 10).toLocaleString("id-ID", { minimumFractionDigits:1, maximumFractionDigits:1 })
+}
+function fmtQty(n: number): string {
+  return Math.round(n || 0).toLocaleString("id-ID", { maximumFractionDigits:0 })
+}
+
+type CatFilterProps = {
+  cat: "factory"|"line"|"buyer"
+  setCat: (c: "factory"|"line"|"buyer") => void
+  factories: string[]; lines: string[]; buyers: string[]
+  valFactory: string[]; setFactory: (v: string[]) => void
+  valLine: string[];    setLine:    (v: string[]) => void
+  valBuyer: string[];   setBuyer:   (v: string[]) => void
+}
+
+// Filter by Factory / Line / Buyer: kategori dipilih dulu, lalu pilihan nilainya (multi-select) menyesuaikan kategori
+function CategoryFilterBar(props: CatFilterProps) {
+  const { cat, setCat } = props
+  const catList  = cat === "factory" ? props.factories : cat === "line" ? props.lines : props.buyers
+  const catValue = cat === "factory" ? props.valFactory : cat === "line" ? props.valLine : props.valBuyer
+  const catSetFn = cat === "factory" ? props.setFactory : cat === "line" ? props.setLine : props.setBuyer
+  function toggle(item: string) {
+    catSetFn(catValue.includes(item) ? catValue.filter(function(x) { return x !== item }) : catValue.concat(item))
+  }
+  return (
+    <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:3, flexShrink:0 }}>
+        <span style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", letterSpacing:".03em" }}>Filter by</span>
+        <div style={{ display:"flex", gap:2, background:"#e3ebe0", borderRadius:999, padding:3 }}>
+          {([["factory","Factory"],["line","Line"],["buyer","Buyer"]] as ["factory"|"line"|"buyer", string][]).map(function([c, label]) {
+            return (
+              <button key={c} onClick={function() { setCat(c) }}
+                style={{ fontSize:11, padding:"5px 14px", borderRadius:999, border:"none",
+                  background:cat===c?C.gdark:"transparent", color:cat===c?"#fff":C.tx2, cursor:"pointer", fontWeight:600 }}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div style={{ display:"flex", alignItems:"center", color:C.tx3, fontSize:14, alignSelf:"center", marginTop:14 }}>&rarr;</div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:3, flex:1, minWidth:220 }}>
+        <span style={{ fontSize:9, color:C.tx3, textTransform:"uppercase", letterSpacing:".03em" }}>
+          Pilih {cat === "factory" ? "Factory" : cat === "line" ? "Line" : "Buyer"} (kosongkan = semua)
+        </span>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6, background:"#fbfaf5", border:"1px dashed #e0c88a", borderRadius:8, padding:"8px 10px" }}>
+          {catList.map(function(item: string) {
+            const active = catValue.includes(item)
+            return (
+              <button key={item} onClick={function() { toggle(item) }}
+                style={{ fontSize:10.5, padding:"4px 10px", borderRadius:999, border: active ? "none" : "0.5px solid #e0c88a",
+                  background:active?C.org:"#fff", color:active?"#fff":"#8a6d1a", cursor:"pointer", fontWeight:active?600:400 }}>
+                {item}
+              </button>
+            )
+          })}
+          {catValue.length > 0 && (
+            <button onClick={function() { catSetFn([]) }}
+              style={{ fontSize:10.5, padding:"4px 10px", borderRadius:999, border:"0.5px solid #e0c88a", background:"#fff", color:C.tx2, cursor:"pointer" }}>
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type FCProps = {
+  loading: boolean
+  data: any
+  search: string
+  weekFrom: string
+  weekTo: string
+  filterCat: "factory"|"line"|"buyer"
+  filterFactory: string[]
+  filterLine: string[]
+  filterBuyer: string[]
+}
+
+type FCItem = { factory: string; line: string }
+
+const FC_WEEK_CHUNK = 13   // maks minggu per file JPG
+const FC_LINE_CHUNK = 15   // maks Line per file JPG (1 Line = 1 blok setinggi ±140px)
+const FC_COL_FACT = 64, FC_COL_LINE = 52, FC_COL_LABEL = 62, FC_SLOT_W = 46
+const FC_ROW_H = [22, 96, 22]
+const FC_LABELS = ["JK", "Buyer", "Qty Plan"]
+
+function KalenderFCTable(props: FCProps) {
+  const { loading, data, search, weekFrom, weekTo, filterCat, filterFactory, filterLine, filterBuyer } = props
+  const [dlScope,   setDlScope]   = useState<"kalender"|"rekap"|"both">("both")
+  const [dlBusy,    setDlBusy]    = useState(false)
+  const [xlBusy,    setXlBusy]    = useState(false)
+  const [capturing, setCapturing] = useState(false)   // kontainer capture JPG hanya dirender saat download (hemat render)
+  const chunkRefs    = useRef<(HTMLDivElement | null)[]>([])
+  const rekapOnlyRef = useRef<HTMLDivElement>(null)
+
+  if (loading) return (
+    <div style={{ padding:"32px", textAlign:"center", color:C.tx3, fontSize:12 }}>
+      Memuat data dari sheet Kalender FC...
+    </div>
+  )
+  if (!data) return (
+    <div style={{ padding:"24px", textAlign:"center", background:C.orp, borderRadius:8, border:"0.5px solid #ffcc80", fontSize:12, color:C.org }}>
+      Gagal memuat data. Pastikan sheet Kalender FC tersedia.
+    </div>
+  )
+
+  const allItems: FCItem[] = (data.factories ?? []).flatMap(function(f: string) {
+    return (data.lines[f] ?? []).map(function(l: string) { return { factory:f, line:l } })
+  })
+
+  const allWeeks: string[] = data.weeks ?? []
+  const fromIdx = allWeeks.indexOf(weekFrom) >= 0 ? allWeeks.indexOf(weekFrom) : 0
+  const toIdx   = allWeeks.indexOf(weekTo)   >= 0 ? allWeeks.indexOf(weekTo)   : allWeeks.length - 1
+  const weeks: string[] = allWeeks.slice(Math.min(fromIdx, toIdx), Math.max(fromIdx, toIdx) + 1)
+
+  function slotsOf(it: FCItem, w: string): any[] {
+    return data.cells[it.factory]?.[it.line]?.[w] ?? [null, null, null]
+  }
+  function buyersOf(it: FCItem, ws: string[]): string[] {
+    const out: string[] = []
+    ws.forEach(function(w) { slotsOf(it, w).forEach(function(s: any) { if (s && s.buyer && out.indexOf(s.buyer) < 0) out.push(s.buyer) }) })
+    return out
+  }
+
+  // Filter by Factory / Line / Buyer (kosongkan pilihan = tidak membatasi). Buyer: Line tampil kalau punya slot berlabel itu di minggu terpilih
+  let catItems = allItems
+  if (filterCat === "factory" && filterFactory.length) {
+    catItems = allItems.filter(function(it) { return filterFactory.includes(it.factory) })
+  } else if (filterCat === "line" && filterLine.length) {
+    catItems = allItems.filter(function(it) { return filterLine.includes(it.line) })
+  } else if (filterCat === "buyer" && filterBuyer.length) {
+    catItems = allItems.filter(function(it) { return buyersOf(it, weeks).some(function(b) { return filterBuyer.includes(b) }) })
+  }
+  const shown: FCItem[] = search
+    ? catItems.filter(function(it) { return matchSearch({ line:it.line, buyer:buyersOf(it, weeks).join(" "), fact:it.factory }, search) })
+    : catItems
+
+  // Rekap Buyer: dari weeks + shown yang SAMA dengan tabel, jadi otomatis ikut semua filter. Tiap label buyer berdiri sendiri.
+  const REKAP_EXCLUDE = new Set(["K12", "A27"])
+  const rekapAcc: Record<string, { qty: number; jk: number; lines: Set<string> }> = {}
+  weeks.forEach(function(w) {
+    shown.forEach(function(it) {
+      if (REKAP_EXCLUDE.has(it.line.toUpperCase())) return
+      slotsOf(it, w).forEach(function(s: any) {
+        if (!s || !s.buyer) return
+        if (!rekapAcc[s.buyer]) rekapAcc[s.buyer] = { qty:0, jk:0, lines:new Set() }
+        rekapAcc[s.buyer].qty += s.qty
+        rekapAcc[s.buyer].jk  += s.jk
+        rekapAcc[s.buyer].lines.add(it.factory + "|" + it.line)
+      })
+    })
+  })
+  const rekapRows = Object.keys(rekapAcc).map(function(b) {
+    return { buyer:b, qty:rekapAcc[b].qty, jk:Math.round(rekapAcc[b].jk * 10) / 10, lineCount:rekapAcc[b].lines.size }
+  }).sort(function(a, b) { return b.qty - a.qty })
+
+  // Legenda: label buyer yang muncul di data yang sedang tampil
+  const legendBuyers: string[] = []
+  shown.forEach(function(it) { buyersOf(it, weeks).forEach(function(b) { if (legendBuyers.indexOf(b) < 0) legendBuyers.push(b) }) })
+  legendBuyers.sort(fcSortBuyers)
+
+  // Tabel: 1 Line = 3 baris (JK, Buyer, Qty Plan); 1 minggu = 3 slot kolom. Dipakai untuk tampilan utama MAUPUN capture JPG
+  function renderGrid(items: FCItem[], wks: string[], forCapture?: boolean) {
+    const stickyPos = forCapture ? ("static" as const) : ("sticky" as const)
+    const hd: React.CSSProperties = {
+      background:C.gdark, color:"#fff", padding:"6px 8px", fontWeight:500, fontSize:11, textAlign:"center",
+      borderRight:"0.5px solid rgba(255,255,255,.2)", borderBottom:"1px solid rgba(255,255,255,.2)", whiteSpace:"nowrap",
+    }
+    return (
+      <div style={{
+        overflowX: forCapture ? "visible" : "auto", overflowY: forCapture ? "visible" : "auto",
+        borderRadius:8, border:"0.5px solid #c8e6c9", maxHeight: forCapture ? "none" : "calc(100vh - 230px)",
+      }}>
+        <table style={{ borderCollapse:"separate", borderSpacing:0, fontSize:10, minWidth:"max-content" }}>
+          <thead>
+            <tr>
+              <th style={{ ...hd, position:stickyPos, top:0, left:0, zIndex:12, minWidth:FC_COL_FACT, background:"#1b4d24" }}>Fact</th>
+              <th style={{ ...hd, position:stickyPos, top:0, left:FC_COL_FACT, zIndex:12, minWidth:FC_COL_LINE, background:"#1b4d24" }}>Line</th>
+              <th style={{ ...hd, position:stickyPos, top:0, left:FC_COL_FACT + FC_COL_LINE, zIndex:12, minWidth:FC_COL_LABEL, background:"#1b4d24", borderRight:"2px solid rgba(255,255,255,.4)" }}></th>
+              {wks.map(function(w) {
+                return <th key={w} colSpan={3} style={{ ...hd, position:stickyPos, top:0, zIndex:3, borderLeft:"2px solid rgba(255,255,255,.4)" }}>Minggu {w}</th>
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(function(it, ii) {
+              const isFirstOfFactory = ii === 0 || items[ii - 1].factory !== it.factory
+              let span = 0
+              if (isFirstOfFactory) { for (let k = ii; k < items.length && items[k].factory === it.factory; k++) span++ }
+              const blockBg = ii % 2 === 0 ? "#ffffff" : "#f5f9f5"
+              return [0, 1, 2].map(function(ri) {
+                const rowBorder = ri === 2 ? "2px solid #1f3d2a" : "0.5px solid #cfe0cc"
+                return (
+                  <tr key={it.factory + "|" + it.line + "|" + ri}>
+                    {ri === 0 && isFirstOfFactory && (
+                      <td rowSpan={span * 3} style={{ position:stickyPos, left:0, zIndex:6, background:"#eaf2ec", fontWeight:700, color:C.gdark, textAlign:"center",
+                        borderRight:"1px solid #9db8a4", borderBottom:"2px solid #1f3d2a", minWidth:FC_COL_FACT }}>{it.factory}</td>
+                    )}
+                    {ri === 0 && (
+                      <td rowSpan={3} style={{ position:stickyPos, left:FC_COL_FACT, zIndex:6, background:blockBg, fontWeight:700, color:C.txt, textAlign:"center",
+                        borderRight:"1px solid #9db8a4", borderBottom:"2px solid #1f3d2a", minWidth:FC_COL_LINE }}>{it.line}</td>
+                    )}
+                    <td style={{ position:stickyPos, left:FC_COL_FACT + FC_COL_LINE, zIndex:6, background:blockBg, fontWeight:600, fontSize:9, color:C.tx3,
+                      padding:"2px 6px", borderBottom:rowBorder, borderRight:"2px solid #9db8a4", minWidth:FC_COL_LABEL, height:FC_ROW_H[ri] }}>{FC_LABELS[ri]}</td>
+                    {wks.flatMap(function(w) {
+                      const slots = slotsOf(it, w)
+                      return [0, 1, 2].map(function(si) {
+                        const s = slots[si]
+                        const baseStyle: React.CSSProperties = {
+                          minWidth:FC_SLOT_W, height:FC_ROW_H[ri], padding:"2px 5px", borderBottom:rowBorder,
+                          borderLeft: si === 0 ? "2px solid #7fa38a" : "0.5px solid #cfe0cc",
+                          background:blockBg, textAlign:"right",
+                        }
+                        const key = w + "-" + si
+                        if (ri === 1) {
+                          if (s && s.buyer) {
+                            const st = fcBuyerStyle(s.buyer)
+                            return (
+                              <td key={key} style={{ ...baseStyle, background:st.bg, position:"relative", padding:0 }} title={s.buyer}>
+                                <span style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%) rotate(-90deg)",
+                                  whiteSpace:"nowrap", fontSize:9.5, fontWeight:700, color:st.tx }}>{s.buyer}</span>
+                              </td>
+                            )
+                          }
+                          return <td key={key} style={baseStyle}></td>
+                        }
+                        if (ri === 0) return <td key={key} style={baseStyle}>{s ? fmtJK(s.jk) : ""}</td>
+                        return <td key={key} style={{ ...baseStyle, fontWeight:600, color:C.gdark }}>{s ? fmtQty(s.qty) : ""}</td>
+                      })
+                    })}
+                  </tr>
+                )
+              })
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // Panel Rekap Buyer (tiap label berdiri sendiri, termasuk label gabungan seperti Tmag&Others)
+  function renderRekapPanel() {
+    return (
+      <div style={{ flex:"0 0 240px" }}>
+        <div style={{ fontSize:10, fontWeight:600, color:C.tx3, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>Rekap Buyer</div>
+        <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
+          Tidak termasuk Line K12 &amp; A27 (cadangan)
+        </div>
+        {rekapRows.length === 0 ? (
+          <div style={{ fontSize:11, color:C.tx3, padding:"12px 0" }}>Tidak ada data untuk filter ini.</div>
+        ) : (
+          <div style={{ border:"0.5px solid #c8e6c9", borderRadius:8, overflow:"hidden" }}>
+            {rekapRows.map(function(r, i) {
+              const st = fcBuyerStyle(r.buyer)
+              return (
+                <div key={r.buyer} style={{ background:i % 2 === 0 ? "#e8f5e9" : "#fff", padding:"8px 10px", borderBottom:"0.5px solid #cfe0cc" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                    <span style={{ width:10, height:10, borderRadius:2, background:st.bg, border:"1px solid " + st.tx, flexShrink:0 }}/>
+                    <strong style={{ fontSize:11, color:C.txt }}>{r.buyer}</strong>
+                  </div>
+                  <div style={{ fontSize:10, color:C.tx2, display:"grid", gridTemplateColumns:"1fr auto", rowGap:2 }}>
+                    <span>Qty Plan</span><span style={{ fontWeight:600, color:C.gdark, textAlign:"right" }}>{fmtQty(r.qty)} pcs</span>
+                    <span>JK</span><span style={{ textAlign:"right" }}>{fmtJK(r.jk)} jam</span>
+                    <span>Jumlah Line</span><span style={{ textAlign:"right" }}>{r.lineCount}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // === Download JPG: dipecah per blok Line x blok Minggu; tiap file tetap punya kolom Fact/Line dan header minggu sendiri ===
+  const weekChunks = chunkArray(weeks, FC_WEEK_CHUNK)
+  const itemChunks = chunkArray(shown, FC_LINE_CHUNK)
+  const parts: { items: FCItem[]; wks: string[]; li: number }[] = []
+  itemChunks.forEach(function(its, li) { weekChunks.forEach(function(wks) { parts.push({ items:its, wks, li }) }) })
+
+  async function captureAndDownload(el: HTMLElement | null, filename: string) {
+    if (!el) return
+    const html2canvas = (await import("html2canvas")).default
+    const fullW = el.scrollWidth, fullH = el.scrollHeight
+    const canvas = await html2canvas(el, {
+      backgroundColor:"#ffffff", scale:2, width:fullW, height:fullH, windowWidth:fullW, windowHeight:fullH, scrollX:0, scrollY:0,
+    })
+    const a = document.createElement("a")
+    a.href = canvas.toDataURL("image/jpeg", 0.92)
+    a.download = filename
+    a.click()
+    await new Promise(function(res) { setTimeout(res, 350) })
+  }
+
+  // Download Excel: 2 sheet (matriks tampilan + tabel datar), mengikuti filter Minggu / Filter by / Search yang aktif
+  async function handleDownloadExcel() {
+    setXlBusy(true)
+    try {
+      const mod: any = await import("exceljs")
+      const ExcelJS = mod.default ?? mod
+      const wb = fcBuildWorkbook(ExcelJS, {
+        items: shown,
+        weeks,
+        slotsOf,
+        filterText: xlFilterText(filterCat, filterFactory, filterLine, filterBuyer, weeks, search),
+      })
+      const wk = weeks.length ? "_W" + weeks[0] + "-W" + weeks[weeks.length - 1] : ""
+      await xlSave(wb, "kalender-forecast_" + xlFilterLabel(filterCat, filterFactory, filterLine, filterBuyer) + wk + ".xlsx")
+    } catch (e) {
+      alert("Gagal membuat file Excel. Coba lagi.")
+    } finally {
+      setXlBusy(false)
+    }
+  }
+
+  async function handleDownloadJPG() {
+    setDlBusy(true)
+    setCapturing(true)
+    try {
+      // beri waktu kontainer capture tersembunyi selesai dirender sebelum difoto
+      await new Promise(function(res) { setTimeout(res, 700) })
+      const filterLabel = filterCat === "factory" && filterFactory.length ? filterFactory.join("-").toLowerCase().replace(/\s+/g, "")
+        : filterCat === "line" && filterLine.length ? "line-" + filterLine.length + "pcs"
+        : filterCat === "buyer" && filterBuyer.length ? filterBuyer.join("-").toLowerCase().replace(/\s+/g, "")
+        : "semua"
+      const weekAll = weeks.length ? "_W" + weeks[0] + "-W" + weeks[weeks.length - 1] : ""
+      if (dlScope === "rekap") {
+        await captureAndDownload(rekapOnlyRef.current, "rekap-buyer-forecast_" + filterLabel + weekAll + ".jpg")
+      } else {
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i]
+          const wk = "_W" + p.wks[0] + "-W" + p.wks[p.wks.length - 1]
+          const blok = itemChunks.length > 1 ? "_blok" + (p.li + 1) + "dari" + itemChunks.length : ""
+          await captureAndDownload(chunkRefs.current[i], "kalender-forecast_" + filterLabel + wk + blok + ".jpg")
+        }
+      }
+    } catch (e) {
+      alert("Gagal membuat JPG. Coba lagi.")
+    } finally {
+      setCapturing(false)
+      setDlBusy(false)
+    }
+  }
+
+  const filterVal = filterCat === "factory" ? filterFactory : filterCat === "line" ? filterLine : filterBuyer
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8, marginBottom:6 }}>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <span style={{ fontSize:10, color:C.tx3 }}>Download:</span>
+          {([["kalender","Kalender"],["rekap","Rekap Buyer"],["both","Keduanya"]] as [typeof dlScope, string][]).map(function([m, label]) {
+            return (
+              <button key={m} onClick={function() { setDlScope(m) }}
+                style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:dlScope===m?C.gdark:"#fff", color:dlScope===m?"#fff":C.tx2, cursor:"pointer" }}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <button onClick={handleDownloadExcel} disabled={xlBusy}
+            style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"1px solid " + C.gdark, background:"#fff", color:C.gdark, fontWeight:500, cursor:xlBusy?"not-allowed":"pointer" }}>
+            {xlBusy ? "Membuat Excel..." : "Download Excel"}
+          </button>
+          <button onClick={handleDownloadJPG} disabled={dlBusy}
+            style={{ fontSize:10, padding:"5px 12px", borderRadius:6, border:"none", background:C.gdark, color:"#fff", fontWeight:500, cursor:dlBusy?"not-allowed":"pointer" }}>
+            {dlBusy ? "Membuat JPG..." : "Download JPG"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ fontSize:9, color:C.tx3, marginBottom:8 }}>
+        Yang akan di-download — Minggu: <strong style={{ color:C.gdark }}>{weeks[0] ?? "-"} s/d {weeks[weeks.length-1] ?? "-"}</strong>
+        {" "}({weeks.length} minggu) &bull; Filter by {filterCat === "factory" ? "Factory" : filterCat === "line" ? "Line" : "Buyer"}: <strong style={{ color:C.gdark }}>
+          {filterVal.length ? filterVal.join(", ") : "Semua"}
+        </strong>
+        {" "}&bull; Line tampil: <strong style={{ color:C.gdark }}>{shown.length}</strong>
+        {search && <> &bull; Search: <strong style={{ color:C.gdark }}>"{search}"</strong></>}
+      </div>
+
+      {parts.length > 1 && dlScope !== "rekap" && (
+        <div style={{ fontSize:9, color:C.tx3, marginBottom:8, fontStyle:"italic" }}>
+          Tabel akan dipecah jadi {parts.length} file JPG (maks {FC_WEEK_CHUNK} minggu &times; {FC_LINE_CHUNK} Line per file) — tiap file tetap punya kolom Fact/Line dan header minggu sendiri.
+        </div>
+      )}
+
+      {data.overflow > 0 && (
+        <div style={{ fontSize:9, color:C.org, background:"#fff3e0", border:"0.5px solid #ffcc80", borderRadius:6, padding:"5px 8px", marginBottom:8 }}>
+          {data.overflow} baris pekerjaan memiliki lebih dari 3 slot per minggu — slot ke-4 dan seterusnya tidak ditampilkan.
+        </div>
+      )}
+
+      {legendBuyers.length > 0 && (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center", marginBottom:10, padding:"6px 10px", background:"#f4f7f3", borderRadius:6 }}>
+          <span style={{ fontSize:9, fontWeight:600, color:C.tx3, textTransform:"uppercase" }}>Customer Color Key:</span>
+          {legendBuyers.map(function(b) {
+            const st = fcBuyerStyle(b)
+            return <span key={b} style={{ fontSize:10, fontWeight:600, padding:"2px 10px", borderRadius:999, background:st.bg, color:st.tx }}>{b}</span>
+          })}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
+        {renderRekapPanel()}
+        <div style={{ flex:1, minWidth:0 }}>
+          {shown.length === 0 ? (
+            <div style={{ padding:"24px", textAlign:"center", color:C.tx3, fontSize:12, border:"0.5px solid #c8e6c9", borderRadius:8 }}>
+              Tidak ada Line yang cocok dengan filter/pencarian saat ini.
+            </div>
+          ) : renderGrid(shown, weeks)}
+          <div style={{ marginTop:6, fontSize:9, color:C.tx3, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+            <span>Freeze kolom Fact / Line di kiri &bull; Slot 1-3 = baris pekerjaan ke-1 sampai ke-3 pada Line tersebut</span>
+            {data?.fetched_epoch && <span style={{ marginLeft:"auto" }}>Update: {ageLabel(data.fetched_epoch)}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Kontainer tersembunyi untuk capture JPG: hanya dirender saat tombol Download diklik */}
+      {capturing && (
+        <div style={{ position:"absolute", left:-99999, top:0, pointerEvents:"none" }} aria-hidden="true">
+          {dlScope === "rekap" && (
+            <div ref={rekapOnlyRef} style={{ background:"#fff", padding:12, display:"inline-block" }}>{renderRekapPanel()}</div>
+          )}
+          {dlScope !== "rekap" && parts.map(function(p, i) {
+            return (
+              <div key={i} ref={function(el) { chunkRefs.current[i] = el }} style={{ background:"#fff", padding:12, display:"flex", gap:16, alignItems:"flex-start" }}>
+                {dlScope === "both" && renderRekapPanel()}
+                <div>{renderGrid(p.items, p.wks, true)}</div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [page,       setPage]       = useState<Page>("todo")
@@ -1086,6 +1879,15 @@ export default function DashboardPage() {
   const [kalenderFilterLine,    setKalenderFilterLine]    = useState<string[]>([])
   const [kalenderFilterBuyer,   setKalenderFilterBuyer]   = useState<string[]>([])
   const [kalenderSearch, setKalenderSearch] = useState("")
+  const [fcData,    setFcData]    = useState<any>(null)
+  const [fcLoading, setFcLoading] = useState(false)
+  const [fcFilterCat,     setFcFilterCat]     = useState<"factory"|"line"|"buyer">("factory")
+  const [fcFilterFactory, setFcFilterFactory] = useState<string[]>([])
+  const [fcFilterLine,    setFcFilterLine]    = useState<string[]>([])
+  const [fcFilterBuyer,   setFcFilterBuyer]   = useState<string[]>([])
+  const [fcSearch,   setFcSearch]   = useState("")
+  const [fcWeekFrom, setFcWeekFrom] = useState("")
+  const [fcWeekTo,   setFcWeekTo]   = useState("")
   const [kalenderWeekFrom, setKalenderWeekFrom] = useState("")
   const [kalenderWeekTo,   setKalenderWeekTo]   = useState("")
   const [shipmentData,  setShipmentData]  = useState<any>(null)
@@ -1292,6 +2094,17 @@ export default function DashboardPage() {
       .catch(function() {})
       .finally(function() { setMatSetLoading(false) })
   }, [page, matSetData])
+
+  useEffect(function() {
+    if (page !== "kalenderfc") return
+    if (fcData) return
+    setFcLoading(true)
+    fetch("/api/kalender-fc")
+      .then(function(r) { return r.json() })
+      .then(function(d) { if (d.ok) setFcData(d.data) })
+      .catch(function() {})
+      .finally(function() { setFcLoading(false) })
+  }, [page, fcData])
 
   useEffect(function() {
     if (page !== "kalender") return
@@ -1603,6 +2416,7 @@ export default function DashboardPage() {
             ["todo","To-Do & Concern"],
             ["plandst","Planning"],
             ["kalender","Kalender Planning"],
+            ["kalenderfc","Kalender Planning Forecast"],
             ["matset","Material"],
             ["shipment","Shipment"],
             ["sim","Planning Simulation"],
@@ -1991,6 +2805,61 @@ export default function DashboardPage() {
               search={kalenderSearch} setSearch={setKalenderSearch}
               weekFrom={kalenderWeekFrom} weekTo={kalenderWeekTo}
               filterCat={kalenderFilterCat} filterFactory={kalenderFilterFactory} filterLine={kalenderFilterLine} filterBuyer={kalenderFilterBuyer}
+            />
+          </div>
+        )}
+
+        {/* == KALENDER PLANNING FORECAST == */}
+        {page==="kalenderfc" && (
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+              <div style={{ flex:"0 0 220px" }}>
+                <SearchBox value={fcSearch} onChange={setFcSearch} placeholder="Cari line, buyer, atau factory..."/>
+              </div>
+
+              {fcData?.weeks && (
+                <>
+                  <span style={{ fontSize:10, color:C.tx3 }}>Filter Minggu:</span>
+                  <select value={fcWeekFrom || fcData.weeks[0] || ""} onChange={function(e) { setFcWeekFrom(e.target.value) }}
+                    style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                    {fcData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                  </select>
+                  <span style={{ fontSize:10, color:C.tx3 }}>s/d</span>
+                  <select value={fcWeekTo || fcData.weeks[fcData.weeks.length-1] || ""} onChange={function(e) { setFcWeekTo(e.target.value) }}
+                    style={{ fontSize:11, padding:"4px 6px", border:"0.5px solid #c8e6c9", borderRadius:4 }}>
+                    {fcData.weeks.map(function(w: string) { return <option key={w} value={w}>Minggu {w}</option> })}
+                  </select>
+                </>
+              )}
+
+              <button onClick={function() { setFcData(null) }}
+                style={{ fontSize:10, padding:"4px 10px", borderRadius:6, border:"0.5px solid #c8e6c9", background:"#fff", color:C.tx2, cursor:"pointer", marginLeft:"auto" }}>
+                Refresh
+              </button>
+            </div>
+
+            {fcData && (
+              <CategoryFilterBar
+                cat={fcFilterCat} setCat={setFcFilterCat}
+                factories={fcData.factories ?? []}
+                lines={Array.from(new Set((fcData.factories ?? []).flatMap(function(f: string) { return fcData.lines[f] ?? [] }))) as string[]}
+                buyers={(Array.from(new Set((fcData.factories ?? []).flatMap(function(f: string) {
+                  return Object.values(fcData.cells[f] ?? {}).flatMap(function(byWeek: any) {
+                    return Object.values(byWeek).flatMap(function(slots: any) {
+                      return (slots as any[]).filter(function(s) { return s && s.buyer }).map(function(s) { return s.buyer })
+                    })
+                  })
+                }))) as string[]).sort(fcSortBuyers)}
+                valFactory={fcFilterFactory} setFactory={setFcFilterFactory}
+                valLine={fcFilterLine}       setLine={setFcFilterLine}
+                valBuyer={fcFilterBuyer}     setBuyer={setFcFilterBuyer}
+              />
+            )}
+
+            <KalenderFCTable
+              loading={fcLoading} data={fcData}
+              search={fcSearch} weekFrom={fcWeekFrom} weekTo={fcWeekTo}
+              filterCat={fcFilterCat} filterFactory={fcFilterFactory} filterLine={fcFilterLine} filterBuyer={fcFilterBuyer}
             />
           </div>
         )}
