@@ -665,6 +665,7 @@ function xlArgb(hex: string): string { return "FF" + hex.replace("#", "").toUppe
 
 const XL_THIN   = { style:"thin" as const,   color:{ argb:"FFC8D6C4" } }
 const XL_MEDIUM = { style:"medium" as const, color:{ argb:"FF1F3D2A" } }
+const XL_THICK  = { style:"thick" as const,  color:{ argb:"FF1F3D2A" } }
 const XL_HEAD_FILL = { type:"pattern" as const, pattern:"solid" as const, fgColor:{ argb:"FF1A5C2A" } }
 
 function xlFilterLabel(cat: string, vf: string[], vl: string[], vb: string[]): string {
@@ -802,15 +803,31 @@ function fcBuildWorkbook(ExcelJS: any, a: {
     ii0 += span
   }
 
-  // Border: tipis di semua sel, garis tebal di bawah baris Qty Plan (pemisah antar-Line)
+  // Border: tipis di semua sel, lalu tiap minggu (3 slot) per Line diberi KOTAK TEBAL (thick box) supaya antar-minggu terpisah jelas
   const lastRow = 3 + a.items.length * 3
   for (let r = 3; r <= lastRow; r++) {
     for (let c = 1; c <= lastCol; c++) {
-      const cell = ws.getCell(r, c)
-      const isQty = r >= 4 && (r - 4) % 3 === 2
-      cell.border = { top:XL_THIN, left:XL_THIN, right:XL_THIN, bottom: isQty ? XL_MEDIUM : XL_THIN }
+      ws.getCell(r, c).border = { top:XL_THIN, left:XL_THIN, right:XL_THIN, bottom:XL_THIN }
     }
   }
+  const thick = function(r: number, c: number, side: "top" | "bottom" | "left" | "right") {
+    const cell = ws.getCell(r, c)
+    cell.border = { ...cell.border, [side]: XL_THICK }
+  }
+  a.weeks.forEach(function(w, wi) {
+    const c0 = 4 + wi * 3
+    for (let c = c0; c <= c0 + 2; c++) { thick(3, c, "top"); thick(3, c, "bottom") }        // header minggu
+    thick(3, c0, "left"); thick(3, c0 + 2, "right")
+    a.items.forEach(function(it, ii) {
+      const r0 = 4 + ii * 3
+      for (let c = c0; c <= c0 + 2; c++) { thick(r0, c, "top"); thick(r0 + 2, c, "bottom") } // atas & bawah kotak
+      for (let r = r0; r <= r0 + 2; r++) { thick(r, c0, "left"); thick(r, c0 + 2, "right") } // kiri & kanan kotak
+    })
+  })
+  a.items.forEach(function(it, ii) {                                                       // kolom Fact/Line/keterangan: garis tebal pemisah antar-Line
+    const rq = 4 + ii * 3 + 2
+    for (let c = 1; c <= 3; c++) thick(rq, c, "bottom")
+  })
 
   // --- Sheet 2: tabel datar, 1 baris per slot pekerjaan (siap difilter / pivot) ---
   const ws2 = wb.addWorksheet("Data Forecast", { views:[{ state:"frozen", ySplit:1 }] })
